@@ -13,16 +13,18 @@ use {
 pub enum WhitelistError {
 	#[error("Invalid Instruction")]
 	InvalidInstruction,
-    #[error("Invalid Whitelist Address")]
-    InvalidWhitelistAddress,
-    #[error("No signers")]
-    NoSigners,
+	#[error("Invalid Whitelist Address")]
+	InvalidWhitelistAddress,
+	#[error("Signer error")]
+	SignerError,
+	#[error("Account mismatch")]
+	AccountMismatch,
 	#[error("Whitelist Already Initialized")]
 	WhitelistAlreadyInitialized,
 	#[error("Whitelist Not Initialized")]
 	WhitelistNotInitialized,
 	#[error("Incorrect Account Address")]
-	InvalidUserAccount,
+	IncorrectUserAccount,
 	#[error("Incorrect Whitelist Address")]
 	IncorrectWhitelistAddress,
 	#[error("Incorrect Vault Address")]
@@ -31,18 +33,18 @@ pub enum WhitelistError {
 	IncorrectMintAddress,
 	#[error("Sale Has Not Started")]
 	SaleNotCommenced,
-    #[error("Illegal Mint Owner")]
-    IllegalMintOwner,
+	#[error("Illegal Mint Owner")]
+	IllegalMintOwner,
 	#[error("Unauthorised Access")]
 	Unauthorised,
 	#[error("Insufficient Funds")]
 	InsufficientFunds,
 	#[error("Vault Is Not Empty")]
 	VaultNotEmpty,
-    #[error("Invalid Sale Start Time")]
-    InvalidSaleStartTime,
-    #[error("Overflow")]
-    Overflow,
+	#[error("Invalid Sale Start Time")]
+	InvalidSaleStartTime,
+	#[error("Overflow")]
+	Overflow,
 }
 
 impl From<WhitelistError> for ProgramError {

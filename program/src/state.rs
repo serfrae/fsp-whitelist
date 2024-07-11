@@ -1,6 +1,6 @@
 use {
 	borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-	solana_program::{program_error::ProgramError, pubkey::Pubkey},
+	solana_program::pubkey::Pubkey,
 };
 
 pub const STATE_SIZE: usize = 129;
@@ -10,11 +10,11 @@ pub const USER_DATA_SIZE: usize = 42;
 pub struct WhitelistState {
 	pub bump: u8,
 	pub authority: Pubkey,
-	pub token_vault: Pubkey,
-	pub token_mint: Pubkey,
+	pub vault: Pubkey,
+	pub mint: Pubkey,
 	pub token_price: u64,
 	pub whitelist_size: u64,
-	pub purchase_limit: u64,
+	pub buy_limit: u64,
 	pub sale_start_time: i64,
 }
 
@@ -23,5 +23,5 @@ pub struct UserData {
     pub bump: u8,
     pub whitelisted: bool,
     pub owner: Pubkey,
-	pub amount_purchased: u64,
+	pub amount_bought: u64,
 }

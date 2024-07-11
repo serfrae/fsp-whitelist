@@ -1,7 +1,7 @@
 use {
 	crate::{error::WhitelistError, processor::WhitelistProcessor},
 	solana_program::{
-		account_info::AccountInfo, entrypoing::ProgramResult, program_error::PrintProgramError,
+		account_info::AccountInfo, entrypoint::ProgramResult, program_error::PrintProgramError,
 		pubkey::Pubkey,
 	},
 };

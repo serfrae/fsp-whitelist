@@ -6,7 +6,7 @@ use {
 		pubkey::Pubkey,
 		system_program,
 	},
-	spl_token,
+	spl_token_2022,
 };
 
 #[derive(BorshDeserialize, BorshSerialize, BorshSchema, Debug, PartialEq)]
@@ -24,7 +24,7 @@ pub enum WhitelistInstruction {
 	InitialiseWhitelist {
 		token_price: u64,
 		whitelist_size: u64,
-		purchase_limit: u64,
+		buy_limit: u64,
 		sale_start_time: i64,
 	},
 
@@ -65,7 +65,7 @@ pub enum WhitelistInstruction {
 	/// 4. `[writable]` User whitelist account
 	TerminateUser,
 
-	/// Purchase tokens
+	/// buy tokens
 	///
 	/// Accounts expected:
 	///
@@ -78,7 +78,7 @@ pub enum WhitelistInstruction {
 	/// 6. `[]` Token program
 	/// 7. `[]` System program
 	/// 8. `[]` Associated token account program
-	Purchase { amount: u64 },
+	Buy { amount: u64 },
 
 	/// Deposits tokens into the vault
 	///
@@ -136,13 +136,13 @@ pub enum WhitelistInstruction {
 
 /// Creates an 'InitialiseWhitelist' instruction
 pub fn init_whitelist(
-	whitelist_key: &Pubkey,
-	whitelist_authority_key: &Pubkey,
-	token_vault_key: &Pubkey,
-	token_mint_key: &Pubkey,
+	whitelist: &Pubkey,
+	authority: &Pubkey,
+	vault: &Pubkey,
+	mint: &Pubkey,
 	token_price: u64,
 	whitelist_size: u64,
-	purchase_limit: u64,
+	buy_limit: u64,
 	sale_start_time: i64,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
@@ -150,127 +150,127 @@ pub fn init_whitelist(
 		&WhitelistInstruction::InitialiseWhitelist {
 			token_price,
 			whitelist_size,
-			purchase_limit,
+			buy_limit,
 			sale_start_time,
 		},
 		vec![
-			AccountMeta::new(*whitelist_key, false),
-			AccountMeta::new(*authority_key, true),
-			AccountMeta::new(*token_vault_key, false),
-			AccountMeta::new(*token_mint_key, false),
-			AccountMeta::new_readonly(spl_token::id(), false),
+			AccountMeta::new(*whitelist, false),
+			AccountMeta::new(*authority, true),
+			AccountMeta::new(*vault, false),
+			AccountMeta::new(*mint, false),
+			AccountMeta::new_readonly(spl_token_2022::id(), false),
 			AccountMeta::new_readonly(system_program::id(), false),
 		],
 	))
 }
 
 pub fn add_user(
-	whitelist_key: &Pubkey,
-	authority_key: &Pubkey,
-	token_mint_key: &Pubkey,
-	user_key: &Pubkey,
-	user_whitelist_key: &Pubkey,
+	whitelist: &Pubkey,
+	authority: &Pubkey,
+	mint: &Pubkey,
+	user: &Pubkey,
+	user_whitelist: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
 		&WhitelistInstruction::AddUser,
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
-			AccountMeta::new(*authority_key, true),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new_readonly(*user_key, false),
-			AccountMeta::new(*user_whitelist_key, false),
+			AccountMeta::new_readonly(*whitelist, false),
+			AccountMeta::new(*authority, true),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new_readonly(*user, false),
+			AccountMeta::new(*user_whitelist, false),
 			AccountMeta::new_readonly(system_program::id(), false),
 		],
 	))
 }
 
 pub fn remove_user(
-	whitelist_key: &Pubkey,
-	authority_key: &Pubkey,
-	token_mint_key: &Pubkey,
-	user_key: &Pubkey,
-	user_whitelist_key: &Pubkey,
+	whitelist: &Pubkey,
+	authority: &Pubkey,
+	mint: &Pubkey,
+	user: &Pubkey,
+	user_whitelist: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
 		&WhitelistInstruction::RemoveUser,
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
-			AccountMeta::new(*authority_key, true),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new_readonly(*user_key, false),
-			AccountMeta::new(*user_whitelist_key, false),
+			AccountMeta::new_readonly(*whitelist, false),
+			AccountMeta::new(*authority, true),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new_readonly(*user, false),
+			AccountMeta::new(*user_whitelist, false),
 			AccountMeta::new_readonly(system_program::id(), false),
 		],
 	))
 }
 
 pub fn terminate_user(
-	whitelist_key: &Pubkey,
-	authority_key: &Pubkey,
-	token_mint_key: &Pubkey,
-	user_key: &Pubkey,
-	user_whitelist_key: &Pubkey,
+	whitelist: &Pubkey,
+	authority: &Pubkey,
+	mint: &Pubkey,
+	user: &Pubkey,
+	user_whitelist: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
 		&WhitelistInstruction::TerminateUser,
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
-			AccountMeta::new(*authority_key, true),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new_readonly(*user_key, false),
-			AccountMeta::new(*user_whitelist_key, false),
+			AccountMeta::new_readonly(*whitelist, false),
+			AccountMeta::new(*authority, true),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new_readonly(*user, false),
+			AccountMeta::new(*user_whitelist, false),
 			AccountMeta::new_readonly(system_program::id(), false),
 		],
 	))
 }
 
-pub fn purchase(
-	whitelist_key: &Pubkey,
-	token_vault_key: &Pubkey,
-	token_mint_key: &Pubkey,
-	user_key: &Pubkey,
-	user_whitelist_key: &Pubkey,
-	user_token_account_key: &Pubkey,
+pub fn buy_tokens(
+	whitelist: &Pubkey,
+	vault: &Pubkey,
+	mint: &Pubkey,
+	user: &Pubkey,
+	user_whitelist: &Pubkey,
+	user_token_account: &Pubkey,
 	amount: u64,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
-		&WhitelistInstruction::Purchase { amount },
+		&WhitelistInstruction::Buy { amount },
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
-			AccountMeta::new(*token_vault_key, false),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new(*user_key, true),
-			AccountMeta::new(*user_whitelist_key, false),
-			AccountMeta::new(*user_token_account_key, false),
-			AccountMeta::new_readonly(spl_token::id(), false),
+			AccountMeta::new_readonly(*whitelist, false),
+			AccountMeta::new(*vault, false),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new(*user, true),
+			AccountMeta::new(*user_whitelist, false),
+			AccountMeta::new(*user_token_account, false),
+			AccountMeta::new_readonly(spl_token_2022::id(), false),
 			AccountMeta::new_readonly(system_program::id(), false),
 			AccountMeta::new_readonly(spl_associated_token_account::id(), false),
 		],
 	))
 }
 
-pub fn deposit(
-	whitelist_key: &Pubkey,
-	token_vault_key: &Pubkey,
+pub fn deposit_tokens(
+	whitelist: &Pubkey,
+	vault: &Pubkey,
 	depositor_key: &Pubkey,
 	depositor_token_account_key: &Pubkey,
-	token_mint_key: &Pubkey,
+	mint: &Pubkey,
 	amount: u64,
 ) -> Result<Instruction, ProgramError> {
-	OK(Instruction::new_with_borsh(
+	Ok(Instruction::new_with_borsh(
 		crate::id(),
-		&WhitelistInstruction::Deposit { amount },
+		&WhitelistInstruction::DepositTokens { amount },
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
-			AccountMeta::new(*token_vault_key, false),
+			AccountMeta::new_readonly(*whitelist, false),
+			AccountMeta::new(*vault, false),
 			AccountMeta::new(*depositor_key, true),
 			AccountMeta::new(*depositor_token_account_key, false),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new_readonly(spl_token::id(), false),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new_readonly(spl_token_2022::id(), false),
 			AccountMeta::new_readonly(system_program::id(), false),
 			AccountMeta::new_readonly(spl_associated_token_account::id(), false),
 		],
@@ -278,7 +278,7 @@ pub fn deposit(
 }
 
 pub fn withdraw_sol(
-	whitelist_key: &Pubkey,
+	whitelist: &Pubkey,
 	authority: &Pubkey,
 	amount: u64,
 ) -> Result<Instruction, ProgramError> {
@@ -286,7 +286,7 @@ pub fn withdraw_sol(
 		crate::id(),
 		&WhitelistInstruction::WithdrawSol { amount },
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
+			AccountMeta::new_readonly(*whitelist, false),
 			AccountMeta::new(*authority, true),
 			AccountMeta::new_readonly(system_program::id(), false),
 		],
@@ -294,48 +294,48 @@ pub fn withdraw_sol(
 }
 
 pub fn withdraw_tokens(
-	whitelist_key: &Pubkey,
+	whitelist: &Pubkey,
 	authority: &Pubkey,
-	token_vault_key: &Pubkey,
-	token_mint_key: &Pubkey,
-	authority_token_account_key: &Pubkey,
+	vault: &Pubkey,
+	mint: &Pubkey,
+	authority_token_account: &Pubkey,
 	amount: u64,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
-		&WhitelistInstruction::Withdraw { amount },
+		&WhitelistInstruction::WithdrawTokens { amount },
 		vec![
-			AccountMeta::new_readonly(*whitelist_key, false),
-			AccountMeta::new(*authority_key, true),
-			AccountMeta::new(*token_vault_key, false),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new(*authority_token_account_key, false),
-			AccountMeta::new_readonly(spl_token::id(), false),
+			AccountMeta::new_readonly(*whitelist, false),
+			AccountMeta::new(*authority, true),
+			AccountMeta::new(*vault, false),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new(*authority_token_account, false),
+			AccountMeta::new_readonly(spl_token_2022::id(), false),
 			AccountMeta::new_readonly(system_program::id(), false),
-			AccountMeta::new_reaodnly(spl_associated_token_account::id(), false),
+			AccountMeta::new_readonly(spl_associated_token_account::id(), false),
 		],
 	))
 }
 
 pub fn terminate_whitelist(
-	whitelist_key: &Pubkey,
-	authority_key: &Pubkey,
-	token_vault_key: &Pubkey,
-	token_mint_key: &Pubkey,
-	authority_token_account_key: &Pubkey,
+	whitelist: &Pubkey,
+	authority: &Pubkey,
+	vault: &Pubkey,
+	mint: &Pubkey,
+	authority_token_account: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
 		&WhitelistInstruction::TerminateWhitelist,
 		vec![
-			AccountMeta::new(*whitelist_key, false),
-			AccountMeta::new(*authority_key, true),
-			AccountMeta::new(*token_vault_key, false),
-			AccountMeta::new_readonly(*token_mint_key, false),
-			AccountMeta::new(*authority_token_account_key, false),
-			AccountMeta::new_readonly(spl_token::id(), false),
+			AccountMeta::new(*whitelist, false),
+			AccountMeta::new(*authority, true),
+			AccountMeta::new(*vault, false),
+			AccountMeta::new_readonly(*mint, false),
+			AccountMeta::new(*authority_token_account, false),
+			AccountMeta::new_readonly(spl_token_2022::id(), false),
 			AccountMeta::new_readonly(system_program::id(), false),
-			AccountMeta::new_readonly(spl_associated_token_program::id(), false),
+			AccountMeta::new_readonly(spl_associated_token_account::id(), false),
 		],
 	))
 }

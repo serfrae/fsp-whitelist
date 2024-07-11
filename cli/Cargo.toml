@@ -9,14 +9,14 @@ edition = "2021"
 stuk-whitelist = { version = "0.1.0", path = "../program" }
 anyhow = "1.0.86"
 borsh = "1.5.1"
-clap = "4.5.9"
-serde = "1.0.204"
+clap = { version = "4.5.9", features = ["cargo", "derive" ] }
 solana-cli-config = "2.0.2"
 solana-program = "2.0.2"
 solana-sdk = "2.0.2"
 spl-associated-token-account = "4.0.0"
 spl-token = "6.0.0"
 chrono = "0.4.38"
+solana-client = "2.0.2"
 
 [[bin]]
 name = "stuk-wl"
