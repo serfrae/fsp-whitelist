@@ -1,0 +1,22 @@
+[package]
+name = "stuk-whitelist"
+version = "0.1.0"
+authors = ["Ser Frae <a@serfrae.com>"]
+description = "Whitelist on-chain program for the Superteam UK talent olympics"
+edition = "2021"
+
+[dependencies]
+borsh = { version = "1.5.1", features = ["derive"] }
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+solana-program = "2.0.2"
+spl-associated-token-account = { version = "4.0.0", features = ["no-entrypoint"] }
+spl-token = "6.0.0"
+thiserror = "1.0.61"
+
+[dev-dependencies]
+solana-program-test = "2.0.2"
+
+[lib]
+name = "stuk_wl"
+crate-type = ["cdylib", "lib"]
