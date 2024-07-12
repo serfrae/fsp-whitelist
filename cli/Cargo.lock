@@ -4116,6 +4116,7 @@ dependencies = [
  "num-traits",
  "solana-program",
  "spl-associated-token-account",
+ "spl-token",
  "spl-token-2022",
  "thiserror",
 ]

@@ -17,7 +17,10 @@ use {
 		system_instruction, system_program,
 		sysvar::{clock::Clock, rent::Rent, Sysvar},
 	},
-	spl_token_2022::{state::{Account, Mint}, extension::StateWithExtensions},
+	spl_token_2022::{
+		extension::StateWithExtensions,
+		state::{Account, Mint},
+	},
 };
 
 pub struct WhitelistProcessor;
@@ -35,18 +38,45 @@ impl WhitelistProcessor {
 			WhitelistInstruction::InitialiseWhitelist {
 				token_price,
 				whitelist_size,
+				allow_registration,
 				buy_limit,
-				sale_start_time,
+				registration_start_timestamp,
+				registration_end_timestamp,
+				sale_start_timestamp,
+				sale_end_timestamp,
 			} => Self::process_init(
 				accounts,
 				token_price,
 				whitelist_size,
 				buy_limit,
-				sale_start_time,
+				allow_registration,
+				registration_start_timestamp,
+				registration_end_timestamp,
+				sale_start_timestamp,
+				sale_end_timestamp,
 			),
 			WhitelistInstruction::AddUser => Self::process_add_user(accounts),
 			WhitelistInstruction::RemoveUser => Self::process_remove_user(accounts),
-			WhitelistInstruction::TerminateUser => Self::process_terminate_user(accounts),
+			WhitelistInstruction::AmendWhitelistSize { size } => {
+				Self::process_amend_whitelist_size(accounts, size)
+			}
+			WhitelistInstruction::AmendTimes {
+				registration_start_timestamp,
+				registration_end_timestamp,
+				sale_start_timestamp,
+				sale_end_timestamp,
+			} => Self::process_amend_times(
+				accounts,
+				registration_start_timestamp,
+				registration_end_timestamp,
+				sale_start_timestamp,
+				sale_end_timestamp,
+			),
+			WhitelistInstruction::AllowRegister { allow_registration } => {
+				Self::process_allow_register(accounts, allow_registration)
+			}
+			WhitelistInstruction::Register => Self::process_register(accounts),
+			WhitelistInstruction::Unregister => Self::process_unregister(accounts),
 			WhitelistInstruction::Buy { amount } => Self::process_buy(accounts, amount),
 			WhitelistInstruction::DepositTokens { amount } => {
 				Self::process_deposit_tokens(accounts, amount)
@@ -66,9 +96,13 @@ impl WhitelistProcessor {
 	fn process_init(
 		accounts: &[AccountInfo],
 		token_price: u64,
-		whitelist_size: u64,
+		whitelist_size: Option<u64>,
 		buy_limit: u64,
-		sale_start_time: i64,
+		allow_registration: bool,
+		mut registration_start_timestamp: Option<i64>,
+		registration_end_timestamp: Option<i64>,
+		mut sale_start_timestamp: Option<i64>,
+		sale_end_timestamp: Option<i64>,
 	) -> ProgramResult {
 		let accounts_iter = &mut accounts.iter();
 		let whitelist_account = next_account_info(accounts_iter)?;
@@ -80,9 +114,8 @@ impl WhitelistProcessor {
 		let assc_token_program = next_account_info(accounts_iter)?;
 
 		let rent = Rent::get()?;
-		let clock = Clock::get()?;
 
-		let (wl, bump) = crate::get_whitelist_address(authority.key, mint.key);
+		let (wl, bump) = crate::get_whitelist_address(mint.key);
 
 		// Safety dance
 		if whitelist_account.key != &wl {
@@ -117,8 +150,15 @@ impl WhitelistProcessor {
 			return Err(ProgramError::IncorrectProgramId);
 		}
 
-		if clock.unix_timestamp > sale_start_time {
-			return Err(WhitelistError::InvalidSaleStartTime.into());
+		// Sets the `sale_start_timestamp` to equal the `registration_start_timestamp` if
+		// `sale_start_timestamp is `None`
+		if registration_start_timestamp.is_some() && sale_start_timestamp.is_none() {
+			sale_start_timestamp = registration_start_timestamp;
+		}
+		// Sets the `registration_start_timestamp` to equal the `sale_start_timestamp` if
+		// `registration_start_timestamp` is `None`
+		if sale_start_timestamp.is_some() && registration_start_timestamp.is_none() {
+			registration_start_timestamp = sale_start_timestamp;
 		}
 
 		if whitelist_account.owner != &crate::id() {
@@ -138,7 +178,7 @@ impl WhitelistProcessor {
 					whitelist_account.clone(),
 					system_program.clone(),
 				],
-				&[&[SEED, authority.key.as_ref(), &[bump]]],
+				&[&[SEED, mint.key.as_ref(), &[bump]]],
 			)?;
 
 			msg!("Initialising vault");
@@ -158,7 +198,7 @@ impl WhitelistProcessor {
 					token_program.clone(),
 					assc_token_program.clone(),
 				],
-				&[&[SEED, authority.key.as_ref(), &[bump]]],
+				&[&[SEED, mint.key.as_ref(), &[bump]]],
 			)?;
 		}
 
@@ -168,10 +208,17 @@ impl WhitelistProcessor {
 			vault: *vault.key,
 			mint: *mint.key,
 			token_price,
-			whitelist_size,
 			buy_limit,
-			sale_start_time,
+			whitelist_size,
+			whitelisted_users: 0,
+			allow_registration,
+			registration_start_timestamp,
+			registration_end_timestamp,
+			sale_start_timestamp,
+			sale_end_timestamp,
 		};
+
+		whitelist_state.check_times()?;
 
 		whitelist_state.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
 		msg!("Whitelist initialised");
@@ -190,9 +237,9 @@ impl WhitelistProcessor {
 
 		let rent = Rent::get()?;
 
-		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+		let mut wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
 
-		let (wl, bump) = crate::get_whitelist_address(authority.key, mint.key);
+		let (wl, _bump) = crate::get_whitelist_address(mint.key);
 		let (user_wl, user_bump) = crate::get_user_whitelist_address(user_account.key, &wl);
 
 		if whitelist_account.key != &wl {
@@ -243,12 +290,18 @@ impl WhitelistProcessor {
 
 		let user_data = UserData {
 			bump: user_bump,
-			whitelisted: true,
 			owner: *user_account.key,
+			payer: *authority.key,
 			amount_bought: 0,
 		};
 
+		wl_data.whitelisted_users = match wl_data.whitelisted_users.checked_add(1) {
+			Some(x) => x,
+			None => return Err(WhitelistError::Overflow.into()),
+		};
+
 		user_data.serialize(&mut &mut user_whitelist_account.data.borrow_mut()[..])?;
+		wl_data.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
 
 		msg!("User initialised");
 
@@ -256,67 +309,36 @@ impl WhitelistProcessor {
 	}
 
 	fn process_remove_user(accounts: &[AccountInfo]) -> ProgramResult {
-		let accounts_iter = &mut accounts.iter();
-		let whitelist_account = next_account_info(accounts_iter)?;
-		let authority = next_account_info(accounts_iter)?;
-		let mint = next_account_info(accounts_iter)?;
-		let user_account = next_account_info(accounts_iter)?;
-		let user_whitelist_account = next_account_info(accounts_iter)?;
-		let system_program = next_account_info(accounts_iter)?;
-
-		let (wl, wl_bump) = get_whitelist_address(&authority.key, &mint.key);
-		let (user_wl, user_bump) = get_user_whitelist_address(&user_account.key, &wl);
-
-		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
-		let mut user_data = UserData::try_from_slice(&user_whitelist_account.data.borrow()[..])?;
-
-		if !authority.is_signer || authority.key != &wl_data.authority {
-			return Err(WhitelistError::SignerError.into());
-		}
-
-		if whitelist_account.key != &wl || wl_bump != wl_data.bump {
-			return Err(WhitelistError::IncorrectWhitelistAddress.into());
-		}
-
-		if user_whitelist_account.key != &user_wl || user_bump != user_data.bump {
-			return Err(WhitelistError::IncorrectUserAccount.into());
-		}
-
-		if system_program.key != &system_program::id() {
-			return Err(ProgramError::IncorrectProgramId);
-		}
-
-		user_data.whitelisted = false;
-
-		user_data.serialize(&mut &mut user_account.data.borrow_mut()[..])?;
-
-		msg!("User removed from whitelist");
-
+		Self::_process_terminate_user(accounts, true)?;
 		Ok(())
 	}
 
-	fn process_terminate_user(accounts: &[AccountInfo]) -> ProgramResult {
+	fn _process_terminate_user(accounts: &[AccountInfo], check_authority: bool) -> ProgramResult {
 		let accounts_iter = &mut accounts.iter();
 		let whitelist_account = next_account_info(accounts_iter)?;
 		let authority = next_account_info(accounts_iter)?;
-		let mint = next_account_info(accounts_iter)?;
 		let user_account = next_account_info(accounts_iter)?;
 		let user_whitelist_account = next_account_info(accounts_iter)?;
 		let system_program = next_account_info(accounts_iter)?;
 
-		let (wl, wl_bump) = get_whitelist_address(&authority.key, &mint.key);
-		let (user_wl, user_bump) = get_user_whitelist_address(&user_account.key, &wl);
+		let (user_wl, user_bump) = get_user_whitelist_address(&user_account.key, &whitelist_account.key);
 
-		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+		let mut wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let user_data = UserData::try_from_slice(&user_whitelist_account.data.borrow()[..])?;
 
-		if !authority.is_signer || authority.key != &wl_data.authority {
-			return Err(WhitelistError::SignerError.into());
+		if !check_authority {
+			if user_account.key != &user_data.owner {
+				return Err(WhitelistError::Unauthorised.into());
+			}
 		}
 
-		if whitelist_account.key != &wl || wl_bump != wl_data.bump {
-			return Err(WhitelistError::IncorrectWhitelistAddress.into());
-		}
+		let payer_account = if &user_data.payer == authority.key {
+			authority
+		} else if &user_data.payer == user_account.key {
+			user_account
+		} else {
+			return Err(WhitelistError::IncorrectPayer.into());
+		};
 
 		if user_whitelist_account.key != &user_wl || user_bump != user_data.bump {
 			return Err(WhitelistError::IncorrectUserAccount.into());
@@ -326,28 +348,192 @@ impl WhitelistProcessor {
 			return Err(ProgramError::IncorrectProgramId);
 		}
 
-		let user_whitelist_lamports = user_whitelist_account.lamports();
+		let user_lamports = user_whitelist_account.lamports();
 
 		invoke_signed(
 			&system_instruction::transfer(
 				user_whitelist_account.key,
-				authority.key,
-				user_whitelist_lamports,
+				payer_account.key,
+				user_lamports,
 			),
 			&[
 				user_whitelist_account.clone(),
-				authority.clone(),
-				whitelist_account.clone(),
+				payer_account.clone(),
+				system_program.clone(),
 			],
-			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
+			&[&[
+				SEED,
+				user_account.key.as_ref(),
+				whitelist_account.key.as_ref(),
+			]],
 		)?;
+
 		user_whitelist_account.assign(&system_program::id());
 		user_whitelist_account.realloc(0, false)?;
+		wl_data.whitelisted_users = match wl_data.whitelisted_users.checked_sub(1) {
+			Some(x) => x,
+			None => return Err(WhitelistError::Overflow.into()),
+		};
+		msg!("User unregistered reclaimed: {} lamports", user_lamports);
+		Ok(())
+	}
 
-		msg!(
-			"User terminated, reclaimed sol: {} lamports",
-			user_whitelist_lamports
-		);
+	fn process_amend_whitelist_size(accounts: &[AccountInfo], size: Option<u64>) -> ProgramResult {
+		let accounts_iter = &mut accounts.iter();
+		let whitelist_account = next_account_info(accounts_iter)?;
+		let authority = next_account_info(accounts_iter)?;
+
+		let mut wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+
+		if authority.key != &wl_data.authority {
+			return Err(WhitelistError::Unauthorised.into());
+		}
+
+		wl_data.whitelist_size = size;
+		wl_data.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
+		Ok(())
+	}
+
+	fn process_amend_times(
+		accounts: &[AccountInfo],
+		registration_start_timestamp: Option<i64>,
+		registration_end_timestamp: Option<i64>,
+		sale_start_timestamp: Option<i64>,
+		sale_end_timestamp: Option<i64>,
+	) -> ProgramResult {
+		let accounts_iter = &mut accounts.iter();
+		let whitelist_account = next_account_info(accounts_iter)?;
+		let authority = next_account_info(accounts_iter)?;
+
+		let clock = Clock::get()?;
+
+		let mut wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+
+		if authority.key != &wl_data.authority {
+			return Err(WhitelistError::Unauthorised.into());
+		}
+
+		// We generally don't need to check the end times as this will be handled by the state
+		// method
+		if registration_start_timestamp.is_some() {
+			// Abort if registration has already started
+			if wl_data
+				.registration_start_timestamp
+				.is_some_and(|t| t > clock.unix_timestamp)
+			{
+				return Err(WhitelistError::RegistrationStarted.into());
+			}
+		}
+
+		// The same safety check as above for the sale
+		if sale_start_timestamp.is_some() {
+			if wl_data
+				.sale_start_timestamp
+				.is_some_and(|t| t > clock.unix_timestamp)
+			{
+				return Err(WhitelistError::SaleStarted.into());
+			}
+		}
+
+		if registration_start_timestamp.is_some_and(|t| t != 0) {
+			wl_data.registration_start_timestamp = registration_start_timestamp;
+		} else if registration_start_timestamp.is_some_and(|t| t == 0) {
+			wl_data.registration_start_timestamp = None;
+		}
+
+		if registration_end_timestamp.is_some_and(|t| t != 0) {
+			wl_data.registration_end_timestamp = registration_end_timestamp;
+		} else if registration_end_timestamp.is_some_and(|t| t == 0) {
+			wl_data.registration_end_timestamp = None;
+		}
+
+		if sale_start_timestamp.is_some_and(|t| t != 0) {
+			wl_data.sale_start_timestamp = sale_start_timestamp;
+		} else if sale_start_timestamp.is_some_and(|t| t == 0) {
+			wl_data.sale_start_timestamp = None;
+		}
+
+		if sale_end_timestamp.is_some_and(|t| t != 0) {
+			wl_data.sale_end_timestamp = sale_end_timestamp;
+		} else if sale_end_timestamp.is_some_and(|t| t == 0) {
+			wl_data.sale_end_timestamp = None;
+		}
+
+		wl_data.check_times()?;
+
+		wl_data.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
+		Ok(())
+	}
+
+	fn process_allow_register(accounts: &[AccountInfo], allow_registration: bool) -> ProgramResult {
+		let accounts_iter = &mut accounts.iter();
+		let whitelist_account = next_account_info(accounts_iter)?;
+		let authority = next_account_info(accounts_iter)?;
+
+		let mut wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+
+		if authority.key != &wl_data.authority {
+			return Err(WhitelistError::Unauthorised.into());
+		}
+
+		wl_data.allow_registration = allow_registration;
+		wl_data.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
+
+		msg!("Allow registration: {}", allow_registration);
+
+		Ok(())
+	}
+
+	fn process_register(accounts: &[AccountInfo]) -> ProgramResult {
+		let accounts_iter = &mut accounts.iter();
+		let whitelist_account = next_account_info(accounts_iter)?;
+		let user_account = next_account_info(accounts_iter)?;
+		let user_whitelist_account = next_account_info(accounts_iter)?;
+		let system_program = next_account_info(accounts_iter)?;
+
+		let (_user_wl, user_bump) =
+			get_user_whitelist_address(&user_account.key, &whitelist_account.key);
+
+		if user_whitelist_account.owner != &crate::id() {
+			let rent = Rent::get()?;
+			invoke_signed(
+				&system_instruction::create_account(
+					user_account.key,
+					user_whitelist_account.key,
+					rent.minimum_balance(USER_DATA_SIZE)
+						.max(1)
+						.saturating_sub(user_whitelist_account.lamports()),
+					USER_DATA_SIZE as u64,
+					&crate::id(),
+				),
+				&[
+					user_account.clone(),
+					user_whitelist_account.clone(),
+					system_program.clone(),
+				],
+				&[&[
+					SEED,
+					user_account.key.as_ref(),
+					whitelist_account.key.as_ref(),
+					&[user_bump],
+				]],
+			)?;
+		}
+
+		let user_data = UserData {
+			bump: user_bump,
+			owner: *user_account.key,
+			payer: *user_account.key,
+			amount_bought: 0,
+		};
+
+		user_data.serialize(&mut &mut user_whitelist_account.data.borrow_mut()[..])?;
+
+		Ok(())
+	}
+
+	fn process_unregister(accounts: &[AccountInfo]) -> ProgramResult {
+		Self::_process_terminate_user(accounts, false)?;
 		Ok(())
 	}
 
@@ -365,14 +551,15 @@ impl WhitelistProcessor {
 
 		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let mut user_data = UserData::try_from_slice(&user_whitelist_account.data.borrow()[..])?;
-        let borrowed_mint_data = mint.data.borrow();
+		let borrowed_mint_data = mint.data.borrow();
 		let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
-        let borrowed_vault_data = vault.data.borrow();
+		let borrowed_vault_data = vault.data.borrow();
 		let vault_data = StateWithExtensions::<Account>::unpack(&borrowed_vault_data)?;
 
-		let token_amount = spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
+		let token_amount =
+			spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
 
-		let (wl, wl_bump) = get_whitelist_address(&mint.key, &wl_data.authority);
+		let (wl, _wl_bump) = get_whitelist_address(&mint.key);
 		let (user_wl, user_bump) = get_user_whitelist_address(&user_account.key, &wl);
 
 		if !user_account.is_signer {
@@ -383,16 +570,34 @@ impl WhitelistProcessor {
 			return Err(WhitelistError::InsufficientFunds.into());
 		}
 
-		if !user_data.whitelisted {
-			return Err(WhitelistError::Unauthorised.into());
-		}
-
 		let sol_amount = match token_amount.checked_mul(wl_data.token_price) {
 			Some(x) => x,
 			None => return Err(WhitelistError::Overflow.into()),
 		};
 
-        // We'll check for a `user_token_account` and create one if it doesn't exist
+		// We'll check for a `user_token_account` and create one if it doesn't exist
+		if user_token_account.owner != &spl_token_2022::id()
+			|| user_token_account.owner != &spl_token::id()
+		{
+			invoke(
+				&spl_associated_token_account::instruction::create_associated_token_account(
+					user_account.key,
+					user_token_account.key,
+					mint.key,
+					&spl_token_2022::id(),
+				),
+				&[
+					user_account.clone(),
+					user_token_account.clone(),
+					user_account.clone(),
+					mint.clone(),
+					system_program.clone(),
+					token_program.clone(),
+					assc_token_program.clone(),
+				],
+			)?;
+		}
+
 		invoke(
 			&system_instruction::transfer(user_account.key, whitelist_account.key, sol_amount),
 			&[user_account.clone(), whitelist_account.clone()],
@@ -415,7 +620,7 @@ impl WhitelistProcessor {
 				user_token_account.clone(),
 				whitelist_account.clone(),
 			],
-			&[&[SEED, mint.key.as_ref(), wl_data.authority.as_ref()]],
+			&[&[SEED, mint.key.as_ref()]],
 		)?;
 
 		user_data.amount_bought = match user_data.amount_bought.checked_add(token_amount) {
@@ -437,12 +642,13 @@ impl WhitelistProcessor {
 		let token_program = next_account_info(accounts_iter)?;
 
 		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
-        let borrowed_mint_data = mint.data.borrow();
+		let borrowed_mint_data = mint.data.borrow();
 		let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
 
-		let token_amount = spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
+		let token_amount =
+			spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
 
-		let (wl, wl_bump) = get_whitelist_address(mint.key, &wl_data.authority);
+		let (wl, wl_bump) = get_whitelist_address(mint.key);
 
 		if whitelist_account.key != &wl || wl_bump != wl_data.bump {
 			return Err(WhitelistError::InvalidWhitelistAddress.into());
@@ -498,19 +704,23 @@ impl WhitelistProcessor {
 		let authority = next_account_info(accounts_iter)?;
 		let vault = next_account_info(accounts_iter)?;
 		let mint = next_account_info(accounts_iter)?;
-		let authority_token_account = next_account_info(accounts_iter)?;
+		let recipient_token_account = next_account_info(accounts_iter)?;
 		let token_program = next_account_info(accounts_iter)?;
 
-        let borrowed_mint_data = mint.data.borrow();
+		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+		wl_data.check_sale_time()?;
+
+		let borrowed_mint_data = mint.data.borrow();
 		let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
-		let token_amount = spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
+		let token_amount =
+			spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
 
 		invoke_signed(
 			&spl_token_2022::instruction::transfer_checked(
 				token_program.key,
 				vault.key,
 				mint.key,
-				authority_token_account.key,
+				recipient_token_account.key,
 				whitelist_account.key,
 				&[],
 				token_amount,
@@ -519,7 +729,7 @@ impl WhitelistProcessor {
 			&[
 				vault.clone(),
 				mint.clone(),
-				authority_token_account.clone(),
+				recipient_token_account.clone(),
 				whitelist_account.clone(),
 			],
 			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
@@ -533,6 +743,7 @@ impl WhitelistProcessor {
 		let accounts_iter = &mut accounts.iter();
 		let whitelist_account = next_account_info(accounts_iter)?;
 		let authority = next_account_info(accounts_iter)?;
+		let recipient_account = next_account_info(accounts_iter)?;
 		let system_program = next_account_info(accounts_iter)?;
 
 		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
@@ -541,7 +752,7 @@ impl WhitelistProcessor {
 			&system_instruction::transfer(whitelist_account.key, authority.key, amount),
 			&[
 				whitelist_account.clone(),
-				authority.clone(),
+				recipient_account.clone(),
 				system_program.clone(),
 			],
 			&[&[SEED, wl_data.mint.as_ref(), authority.key.as_ref()]],
@@ -555,37 +766,43 @@ impl WhitelistProcessor {
 		let authority = next_account_info(accounts_iter)?;
 		let vault = next_account_info(accounts_iter)?;
 		let mint = next_account_info(accounts_iter)?;
-		let authority_token_account = next_account_info(accounts_iter)?;
+		let recipient_account = next_account_info(accounts_iter)?;
+		let recipient_token_account = next_account_info(accounts_iter)?;
 		let token_program = next_account_info(accounts_iter)?;
 		let system_program = next_account_info(accounts_iter)?;
 
 		let whitelist_lamports = whitelist_account.lamports();
 		let vault_lamports = vault.lamports();
-        let borrowed_vault_data = vault.data.borrow();
+		let borrowed_vault_data = vault.data.borrow();
 		let vault_data = StateWithExtensions::<Account>::unpack(&borrowed_vault_data)?;
-        let borrowed_mint_data = mint.data.borrow();
+		let borrowed_mint_data = mint.data.borrow();
 		let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
 
+		let wl_data = WhitelistState::try_from_slice(&whitelist_account.data.borrow()[..])?;
+		wl_data.check_sale_time()?;
+
 		// Transfer remaining tokens out of the vault
-		invoke_signed(
-			&spl_token_2022::instruction::transfer_checked(
-				token_program.key,
-				vault.key,
-				mint.key,
-				authority_token_account.key,
-				whitelist_account.key,
-				&[],
-				vault_data.base.amount,
-				mint_data.base.decimals,
-			)?,
-			&[
-				vault.clone(),
-				mint.clone(),
-				authority_token_account.clone(),
-				whitelist_account.clone(),
-			],
-			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
-		)?;
+		if vault_data.base.amount != 0 {
+			invoke_signed(
+				&spl_token_2022::instruction::transfer_checked(
+					token_program.key,
+					vault.key,
+					mint.key,
+					recipient_token_account.key,
+					whitelist_account.key,
+					&[],
+					vault_data.base.amount,
+					mint_data.base.decimals,
+				)?,
+				&[
+					vault.clone(),
+					mint.clone(),
+					recipient_token_account.clone(),
+					whitelist_account.clone(),
+				],
+				&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
+			)?;
+		}
 
 		// Close vault and reclaim lamports
 		invoke_signed(
@@ -605,7 +822,7 @@ impl WhitelistProcessor {
 			&system_instruction::transfer(whitelist_account.key, authority.key, whitelist_lamports),
 			&[
 				whitelist_account.clone(),
-				authority.clone(),
+				recipient_account.clone(),
 				system_program.clone(),
 			],
 			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],

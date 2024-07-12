@@ -31,6 +31,8 @@ pub enum WhitelistError {
 	IncorrectVaultAddress,
 	#[error("Incorrect Underlying Mint Address")]
 	IncorrectMintAddress,
+	#[error("Incorrect payer")]
+	IncorrectPayer,
 	#[error("Sale Has Not Started")]
 	SaleNotCommenced,
 	#[error("Illegal Mint Owner")]
@@ -41,8 +43,28 @@ pub enum WhitelistError {
 	InsufficientFunds,
 	#[error("Vault Is Not Empty")]
 	VaultNotEmpty,
+	#[error(
+		"The `sale_end_timestamp` or `registration_end_timestamp` is before the current timestamp"
+	)]
+	InvalidTimestamp,
+	#[error("Invalid registration start time")]
+	InvalidRegistrationStartTime,
+	#[error("Registration starts after registration ends")]
+	RegistrationStartAfterRegistrationEnd,
+	#[error("Registration starts after the sale ends")]
+	RegistrationStartAfterSaleEnd,
 	#[error("Invalid Sale Start Time")]
 	InvalidSaleStartTime,
+	#[error("Sale start begins after the sale ends")]
+	SaleStartAfterSaleEnd,
+	#[error("Sale begins before registration")]
+	SaleBeforeRegistration,
+    #[error("Registration has started")]
+    RegistrationStarted,
+    #[error("Token sale has commenced")]
+    SaleStarted,
+    #[error("Sale is still ongoing")]
+    SaleOngoing,
 	#[error("Overflow")]
 	Overflow,
 }
@@ -55,7 +77,7 @@ impl From<WhitelistError> for ProgramError {
 
 impl<T> DecodeError<T> for WhitelistError {
 	fn type_of() -> &'static str {
-		"Lysergic tokenizer error"
+		"Whitelist error"
 	}
 }
 

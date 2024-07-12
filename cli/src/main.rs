@@ -1,5 +1,6 @@
 use {
 	anyhow::{anyhow, Result},
+	borsh::BorshDeserialize,
 	chrono::NaiveDateTime,
 	clap::{command, Args, Parser, Subcommand},
 	solana_cli_config,
@@ -32,9 +33,26 @@ enum Commands {
 	User(UserManagement),
 	#[command(subcommand)]
 	Token(Token),
+	#[command(subcommand)]
+	Amend(Detail),
+	#[command(subcommand)]
+	Register(Registration),
 	Close {
 		mint: Pubkey,
+		recipient: Option<Pubkey>,
 	},
+}
+
+#[derive(Subcommand, Debug)]
+enum UserManagement {
+	Add(UserManagementCommonFields),
+	Remove(UserManagementCommonFields),
+}
+
+#[derive(Args, Debug)]
+struct UserManagementCommonFields {
+	mint: Pubkey,
+	user: Pubkey,
 }
 
 #[derive(Subcommand, Debug)]
@@ -51,33 +69,47 @@ enum TokenType {
 	Sol(TokenFields),
 }
 
+#[derive(Subcommand, Debug)]
+enum Detail {
+	Times {
+		mint: Pubkey,
+		registration_start_time: Option<String>,
+		registration_end_time: Option<String>,
+		sale_start_time: Option<String>,
+		sale_end_time: Option<String>,
+	},
+	Size {
+		mint: Pubkey,
+		size: Option<u64>,
+	},
+}
+
+#[derive(Subcommand, Debug)]
+enum Registration {
+	Allow { allow: bool, mint: Pubkey },
+	Register { mint: Pubkey },
+	Unregister { mint: Pubkey },
+}
+
 #[derive(Args, Debug)]
 struct TokenFields {
 	whitelist: Pubkey,
 	mint: Option<Pubkey>,
+	recipient: Option<Pubkey>,
 	amount: u64,
-}
-
-#[derive(Subcommand, Debug)]
-enum UserManagement {
-	Add(UserCommonFields),
-	Remove(UserCommonFields),
-	Terminate(UserCommonFields),
-}
-
-#[derive(Args, Debug)]
-struct UserCommonFields {
-	mint: Pubkey,
-	user: Pubkey,
 }
 
 #[derive(Args, Debug)]
 struct Init {
 	mint: Pubkey,
 	price: u64,
-	whitelist_size: u64,
-	purchase_limit: u64,
-	sale_start_time: String,
+	buy_limit: u64,
+	whitelist_size: Option<u64>,
+	allow_registration: bool,
+	registration_start_time: Option<String>,
+	registration_end_time: Option<String>,
+	sale_start_time: Option<String>,
+	sale_end_time: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -100,12 +132,27 @@ fn main() -> Result<()> {
 
 	let instruction: Instruction = match args.cmd {
 		Commands::Init(fields) => {
-			let (whitelist, _) = get_whitelist_address(&wallet_pubkey, &fields.mint);
+			let (whitelist, _) = get_whitelist_address(&fields.mint);
 			let vault = spl_associated_token_account::get_associated_token_address(
 				&whitelist,
 				&fields.mint,
 			);
-			let sale_start_time = string_to_timestamp(fields.sale_start_time)?;
+			let registration_start_timestamp = match fields.registration_start_time {
+				Some(time) => Some(string_to_timestamp(time)?),
+				None => None,
+			};
+			let registration_end_timestamp = match fields.registration_end_time {
+				Some(time) => Some(string_to_timestamp(time)?),
+				None => None,
+			};
+			let sale_start_timestamp = match fields.sale_start_time {
+				Some(time) => Some(string_to_timestamp(time)?),
+				None => None,
+			};
+			let sale_end_timestamp = match fields.sale_end_time {
+				Some(time) => Some(string_to_timestamp(time)?),
+				None => None,
+			};
 
 			println!("Whitelist Account: {}", whitelist);
 			println!("Vault Account: {}", vault);
@@ -116,9 +163,13 @@ fn main() -> Result<()> {
 				&vault,
 				&fields.mint,
 				fields.price,
+				fields.buy_limit,
 				fields.whitelist_size,
-				fields.purchase_limit,
-				sale_start_time,
+				fields.allow_registration,
+				registration_start_timestamp,
+				registration_end_timestamp,
+				sale_start_timestamp,
+				sale_end_timestamp,
 			)
 			.map_err(|err| {
 				anyhow!(
@@ -129,7 +180,7 @@ fn main() -> Result<()> {
 		}
 		Commands::User(subcommand) => match subcommand {
 			UserManagement::Add(fields) => {
-				let (whitelist, _) = get_whitelist_address(&wallet_pubkey, &fields.mint);
+				let (whitelist, _) = get_whitelist_address(&fields.mint);
 				let (user_whitelist, _) = get_user_whitelist_address(&fields.user, &whitelist);
 
 				println!("User Whitelist Account: {}", user_whitelist);
@@ -144,7 +195,7 @@ fn main() -> Result<()> {
 				.map_err(|err| anyhow!("Unable to create `AddUser` instruction: {}", err))?
 			}
 			UserManagement::Remove(fields) => {
-				let (whitelist, _) = get_whitelist_address(&wallet_pubkey, &fields.mint);
+				let (whitelist, _) = get_whitelist_address(&fields.mint);
 				let (user_whitelist, _) = get_user_whitelist_address(&fields.user, &whitelist);
 
 				println!("Removing user from whitelist: {}", fields.user);
@@ -158,19 +209,6 @@ fn main() -> Result<()> {
 					&user_whitelist,
 				)
 				.map_err(|err| anyhow!("Unable to create `RemoveUser` instruction: {}", err))?
-			}
-			UserManagement::Terminate(fields) => {
-				let (whitelist, _) = get_whitelist_address(&wallet_pubkey, &fields.mint);
-				let (user_whitelist, _) = get_user_whitelist_address(&fields.user, &whitelist);
-
-				instructions::terminate_user(
-					&whitelist,
-					&wallet_pubkey,
-					&fields.mint,
-					&fields.user,
-					&user_whitelist,
-				)
-				.map_err(|err| anyhow!("Unable to create `TerminateUser` instruction: {}", err))?
 			}
 		},
 		Commands::Token(subcmd) => match subcmd {
@@ -233,9 +271,12 @@ fn main() -> Result<()> {
 						&mint,
 						&fields.whitelist,
 					);
+					let recipient = match fields.recipient {
+						Some(r) => r,
+						None => wallet_pubkey,
+					};
 					let token_account = spl_associated_token_account::get_associated_token_address(
-						&mint,
-						&wallet_pubkey,
+						&mint, &recipient,
 					);
 					instructions::withdraw_tokens(
 						&fields.whitelist,
@@ -250,25 +291,112 @@ fn main() -> Result<()> {
 					})?
 				}
 				TokenType::Sol(fields) => {
-					instructions::withdraw_sol(&fields.whitelist, &wallet_pubkey, fields.amount)
-						.map_err(|err| {
-							anyhow!("Unable to create `WithdrawSol` instruction: {}", err)
-						})?
+					let recipient = match fields.recipient {
+						Some(r) => r,
+						None => wallet_pubkey,
+					};
+					instructions::withdraw_sol(
+						&fields.whitelist,
+						&wallet_pubkey,
+						&recipient,
+						fields.amount,
+					)
+					.map_err(|err| anyhow!("Unable to create `WithdrawSol` instruction: {}", err))?
 				}
 			},
 		},
-		Commands::Close { mint } => {
-			let (whitelist, _) = get_whitelist_address(&mint, &wallet_pubkey);
+		Commands::Amend(detail) => match detail {
+			Detail::Size { mint, size } => {
+				let (whitelist, _) = get_whitelist_address(&mint);
+				instructions::amend_whitelist_size(&whitelist, &wallet_pubkey, size).map_err(
+					|err| anyhow!("Unable to create `AmendWhitelistSize` instruction: {}", err),
+				)?
+			}
+			Detail::Times {
+				mint,
+				registration_start_time,
+				registration_end_time,
+				sale_start_time,
+				sale_end_time,
+			} => {
+				let (whitelist, _) = get_whitelist_address(&mint);
+
+				let registration_start_timestamp = match registration_start_time {
+					Some(time) => Some(string_to_timestamp(time)?),
+					None => None,
+				};
+				let registration_end_timestamp = match registration_end_time {
+					Some(time) => Some(string_to_timestamp(time)?),
+					None => None,
+				};
+				let sale_start_timestamp = match sale_start_time {
+					Some(time) => Some(string_to_timestamp(time)?),
+					None => None,
+				};
+				let sale_end_timestamp = match sale_end_time {
+					Some(time) => Some(string_to_timestamp(time)?),
+					None => None,
+				};
+
+				instructions::amend_times(
+					&whitelist,
+					&wallet_pubkey,
+					registration_start_timestamp,
+					registration_end_timestamp,
+					sale_start_timestamp,
+					sale_end_timestamp,
+				)
+				.map_err(|err| anyhow!("Unable to create `AmendTimes` instruction: {}", err))?
+			}
+		},
+		Commands::Register(reg) => match reg {
+			Registration::Allow { allow, mint } => {
+				let (whitelist, _) = get_whitelist_address(&mint);
+				instructions::allow_registration(&whitelist, &wallet_pubkey, allow).map_err(
+					|err| anyhow!("Unable to create `AllowRegistration` instruction: {}", err),
+				)?
+			}
+			Registration::Register { mint } => {
+				let (whitelist, _) = get_whitelist_address(&mint);
+				let (user_whitelist, _) = get_user_whitelist_address(&wallet_pubkey, &whitelist);
+
+				instructions::register(&whitelist, &wallet_pubkey, &user_whitelist)
+					.map_err(|err| anyhow!("Unable to create `Register` instruction: {}", err))?
+			}
+			Registration::Unregister { mint } => {
+				let (whitelist, _) = get_whitelist_address(&mint);
+				let (user_whitelist, _) = get_user_whitelist_address(&wallet_pubkey, &whitelist);
+
+				let data = client.get_account_data(&whitelist).unwrap().clone();
+				let unpacked_data = stuk_wl::state::WhitelistState::try_from_slice(&data[..])?;
+				let authority = unpacked_data.authority;
+
+				instructions::unregister(
+					&whitelist,
+					&authority,
+					&wallet_pubkey,
+					&user_whitelist,
+				)
+				.map_err(|err| anyhow!("Unable to create `Unregister` instruction: {}", err))?
+			}
+		},
+		Commands::Close { mint, recipient } => {
+			let (whitelist, _) = get_whitelist_address(&mint);
 			let vault =
 				spl_associated_token_account::get_associated_token_address(&mint, &whitelist);
+			let recipient = match recipient {
+				Some(r) => r,
+				None => wallet_pubkey,
+			};
 			let token_account =
-				spl_associated_token_account::get_associated_token_address(&mint, &wallet_pubkey);
+				spl_associated_token_account::get_associated_token_address(&mint, &recipient);
 
 			instructions::terminate_whitelist(
 				&whitelist,
 				&wallet_pubkey,
 				&vault,
 				&mint,
+				&recipient,
 				&token_account,
 			)
 			.map_err(|err| anyhow!("Unable to create `TerminateWhitelist` instruction: {}", err))?
@@ -287,6 +415,6 @@ fn main() -> Result<()> {
 }
 
 fn string_to_timestamp(date_string: String) -> Result<i64, chrono::ParseError> {
-	let datetime = NaiveDateTime::parse_from_string(date_string, "%Y-%m-%s %H:%M:%S")?;
-	Ok(datetime.timestamp)
+	let datetime = NaiveDateTime::parse_from_str(date_string.as_str(), "%Y-%m-%s %H:%M:%S")?;
+	Ok(datetime.and_utc().timestamp())
 }
