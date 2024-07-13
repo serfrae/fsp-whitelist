@@ -26,10 +26,9 @@ pub enum WhitelistInstruction {
 	///  `sale_start_timestamp`, if set to `None` then users will be able to register for the
 	///  whitelist immediately after initialisation of the whitelist
 	///
-	///  `registration_duration`: an optional unixtimestamp of when registration for the
-	///  whitelist is prohibited. This value must be larger than the timestamp provided for
-	///  `registration_start_timestamp` or else initialisation will throw an error. If set to
-	///  `None` there will be no limit for when a user can register for the whitelist
+	///  `registration_duration`: an optional duration in milliseconds when registration for the
+	///  whitelist is allowed.  If set to `None` there will be no limit for when a user can register 
+    ///  for the whitelist
 	///
 	///  `buy_limit`: the amount of the token that can be bought by an individual user, there are
 	///  no checks against the whitelist size or amounts deposited into the vault vs this value
@@ -40,9 +39,10 @@ pub enum WhitelistInstruction {
 	///  then this value will be set to the value of the `registration_start_timestamp` which, if
 	///  also set to `None` will commence the token sale immediately upon initialisation
 	///
-	///  `sale_duration`: an optional unixtimestamp of when the token sale ends, this value
-	///  must be greater than the `sale_start_timestamp` or initialisation will fail. This permits
-	///  the withdrawal of any remaining tokens in the vault after the sale time has elapsed.
+	///  `sale_duration`: an optional duration in millsiseconds for the duration of the sale, this 
+    ///  value. This permits the withdrawal of any remaining tokens in the vault after the sale 
+    ///  time has elapsed. Failing to set this value will not allow termination of the whitelist
+    ///  until all tokens are sold (not recommended).
 	///
 	/// Accounts expected:
 	///

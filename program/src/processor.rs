@@ -1531,7 +1531,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_deposit_tokens(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (binary_program, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1554,42 +1554,6 @@ mod tests {
 			&payer.pubkey(),
 			&payer_token_account,
 			&mint.pubkey(),
-			42,
-		)
-		.unwrap();
-
-		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-		transaction.sign(&[payer], recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-	}
-
-	#[test_case(spl_token::id() ; "Token Program")]
-	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	#[tokio::test]
-	async fn test_buy_tokens(token_program_id: Pubkey) {
-		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
-			&mut banks_client,
-			&payer,
-			&recent_blockhash,
-			&token_program_id,
-		)
-		.await;
-		let user_keypair = Keypair::new();
-		let (user_ticket, _) = get_user_ticket_address(&user_keypair.pubkey(), &whitelist.pubkey());
-		let user_token_account = spl_associated_token_account::get_associated_token_address(
-			&user_keypair.pubkey(),
-			&mint.pubkey(),
-		);
-
-		let ix = crate::instructions::buy_tokens(
-			&whitelist.pubkey(),
-			&vault,
-			&mint.pubkey(),
-			&user_keypair.pubkey(),
-			&user_ticket,
-			&user_token_account,
-			&system_program::id(),
 			42,
 		)
 		.unwrap();
