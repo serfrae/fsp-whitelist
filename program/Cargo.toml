@@ -6,6 +6,7 @@ description = "Whitelist on-chain program for the Superteam UK talent olympics"
 edition = "2021"
 
 [dependencies]
+arrayref = "0.3.7"
 borsh = { version = "1.5.1", features = ["derive"] }
 num-derive = "0.4.2"
 num-traits = "0.2.19"
@@ -16,7 +17,11 @@ spl-token-2022 = "4.0.0"
 thiserror = "1.0.61"
 
 [dev-dependencies]
+chrono = "0.4.38"
 solana-program-test = "2.0.2"
+solana-sdk = "2.0.2"
+test-case = "3.3.1"
+tokio = { version = "1.38.0", features = ["full"] }
 
 [lib]
 name = "stuk_wl"

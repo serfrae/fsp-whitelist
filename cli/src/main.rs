@@ -11,7 +11,7 @@ use {
 		signature::{read_keypair_file, Signer},
 		transaction::Transaction,
 	},
-	stuk_wl::{get_user_whitelist_address, get_whitelist_address, instructions},
+	stuk_wl::{get_user_ticket_address, get_whitelist_address, instructions},
 };
 
 #[derive(Parser, Debug)]
@@ -102,6 +102,7 @@ struct TokenFields {
 #[derive(Args, Debug)]
 struct Init {
 	mint: Pubkey,
+    treasury: Pubkey,
 	price: u64,
 	buy_limit: u64,
 	whitelist_size: Option<u64>,
@@ -162,6 +163,7 @@ fn main() -> Result<()> {
 				&wallet_pubkey,
 				&vault,
 				&fields.mint,
+                &fields.treasury,
 				fields.price,
 				fields.buy_limit,
 				fields.whitelist_size,
@@ -181,32 +183,32 @@ fn main() -> Result<()> {
 		Commands::User(subcommand) => match subcommand {
 			UserManagement::Add(fields) => {
 				let (whitelist, _) = get_whitelist_address(&fields.mint);
-				let (user_whitelist, _) = get_user_whitelist_address(&fields.user, &whitelist);
+				let (user_ticket, _) = get_user_ticket_address(&fields.user, &whitelist);
 
-				println!("User Whitelist Account: {}", user_whitelist);
+				println!("User Whitelist Account: {}", user_ticket);
 
 				instructions::add_user(
 					&whitelist,
 					&wallet_pubkey,
 					&fields.mint,
 					&fields.user,
-					&user_whitelist,
+					&user_ticket,
 				)
 				.map_err(|err| anyhow!("Unable to create `AddUser` instruction: {}", err))?
 			}
 			UserManagement::Remove(fields) => {
 				let (whitelist, _) = get_whitelist_address(&fields.mint);
-				let (user_whitelist, _) = get_user_whitelist_address(&fields.user, &whitelist);
+				let (user_ticket, _) = get_user_ticket_address(&fields.user, &whitelist);
 
 				println!("Removing user from whitelist: {}", fields.user);
-				println!("Whitelist Account: {}", user_whitelist);
+				println!("Whitelist Account: {}", user_ticket);
 
 				instructions::remove_user(
 					&whitelist,
 					&wallet_pubkey,
 					&fields.mint,
 					&fields.user,
-					&user_whitelist,
+					&user_ticket,
 				)
 				.map_err(|err| anyhow!("Unable to create `RemoveUser` instruction: {}", err))?
 			}
@@ -217,8 +219,8 @@ fn main() -> Result<()> {
 					Some(mint) => mint,
 					None => return Err(anyhow!("Please provide the token mint pubkey")),
 				};
-				let (user_whitelist, _) =
-					get_user_whitelist_address(&wallet_pubkey, &fields.whitelist);
+				let (user_ticket, _) =
+					get_user_ticket_address(&wallet_pubkey, &fields.whitelist);
 				let vault = spl_associated_token_account::get_associated_token_address(
 					&mint,
 					&fields.whitelist,
@@ -232,7 +234,7 @@ fn main() -> Result<()> {
 					&vault,
 					&mint,
 					&wallet_pubkey,
-					&user_whitelist,
+					&user_ticket,
 					&user_token_account,
 					fields.amount,
 				)
@@ -358,14 +360,14 @@ fn main() -> Result<()> {
 			}
 			Registration::Register { mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);
-				let (user_whitelist, _) = get_user_whitelist_address(&wallet_pubkey, &whitelist);
+				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
 
-				instructions::register(&whitelist, &wallet_pubkey, &user_whitelist)
+				instructions::register(&whitelist, &wallet_pubkey, &user_ticket)
 					.map_err(|err| anyhow!("Unable to create `Register` instruction: {}", err))?
 			}
 			Registration::Unregister { mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);
-				let (user_whitelist, _) = get_user_whitelist_address(&wallet_pubkey, &whitelist);
+				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
 
 				let data = client.get_account_data(&whitelist).unwrap().clone();
 				let unpacked_data = stuk_wl::state::WhitelistState::try_from_slice(&data[..])?;
@@ -375,7 +377,7 @@ fn main() -> Result<()> {
 					&whitelist,
 					&authority,
 					&wallet_pubkey,
-					&user_whitelist,
+					&user_ticket,
 				)
 				.map_err(|err| anyhow!("Unable to create `Unregister` instruction: {}", err))?
 			}

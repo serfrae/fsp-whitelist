@@ -1,5 +1,5 @@
 use {
-	crate::{error::WhitelistError, processor::WhitelistProcessor},
+	crate::{error::WhitelistError, processor::Processor},
 	solana_program::{
 		account_info::AccountInfo, entrypoint::ProgramResult, program_error::PrintProgramError,
 		pubkey::Pubkey,
@@ -12,7 +12,7 @@ pub fn process_instruction(
 	accounts: &[AccountInfo],
 	instruction_data: &[u8],
 ) -> ProgramResult {
-	if let Err(e) = WhitelistProcessor::process(program_id, accounts, instruction_data) {
+	if let Err(e) = Processor::process(program_id, accounts, instruction_data) {
 		e.print::<WhitelistError>();
 		return Err(e);
 	}

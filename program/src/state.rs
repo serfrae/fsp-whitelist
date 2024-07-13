@@ -8,45 +8,33 @@ use {
 	},
 };
 
-pub const STATE_SIZE: usize = 162;
-pub const USER_DATA_SIZE: usize = 74;
-
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, Debug, PartialEq)]
-pub struct WhitelistState {
+pub struct Whitelist {
 	pub bump: u8,
 	pub authority: Pubkey,
 	pub vault: Pubkey,
+	pub treasury: Pubkey,
 	pub mint: Pubkey,
 	pub token_price: u64,
 	pub buy_limit: u64,
+	pub deposited: u64,
 	pub whitelist_size: Option<u64>,
-	pub whitelisted_users: u64,
 	pub allow_registration: bool,
 	pub registration_start_timestamp: Option<i64>,
-	pub registration_end_timestamp: Option<i64>,
+	pub registration_duration: Option<i64>,
 	pub sale_start_timestamp: Option<i64>,
-	pub sale_end_timestamp: Option<i64>,
+	pub sale_duration: Option<i64>,
 }
 
-impl WhitelistState {
+impl Whitelist {
+	pub const LEN: usize = 194;
+
 	pub fn check_times(&self) -> ProgramResult {
 		let clock = Clock::get()?;
 		// Perform safety checks if a `registration_start_timestamp` is not `None`
 		if let Some(registration_start_timestamp) = self.registration_start_timestamp {
 			if registration_start_timestamp < clock.unix_timestamp {
 				return Err(WhitelistError::InvalidRegistrationStartTime.into());
-			}
-			if self
-				.registration_end_timestamp
-				.is_some_and(|t| t < registration_start_timestamp)
-			{
-				return Err(WhitelistError::RegistrationStartAfterRegistrationEnd.into());
-			}
-			if self
-				.sale_end_timestamp
-				.is_some_and(|t| t < registration_start_timestamp)
-			{
-				return Err(WhitelistError::RegistrationStartAfterSaleEnd.into());
 			}
 		}
 
@@ -56,28 +44,11 @@ impl WhitelistState {
 				return Err(WhitelistError::InvalidSaleStartTime.into());
 			}
 			if self
-				.sale_end_timestamp
-				.is_some_and(|t| t < sale_start_timestamp)
-			{
-				return Err(WhitelistError::SaleStartAfterSaleEnd.into());
-			}
-			if self
 				.registration_start_timestamp
 				.is_some_and(|t| t > sale_start_timestamp)
 			{
 				return Err(WhitelistError::SaleBeforeRegistration.into());
 			}
-		}
-
-		// Ensure the end timestamps for registration and sale are greater than the current time
-		if self
-			.registration_end_timestamp
-			.is_some_and(|t| t <= clock.unix_timestamp)
-			|| self
-				.sale_end_timestamp
-				.is_some_and(|t| t <= clock.unix_timestamp)
-		{
-			return Err(WhitelistError::InvalidTimestamp.into());
 		}
 
 		Ok(())
@@ -88,9 +59,6 @@ impl WhitelistState {
 		if self
 			.sale_start_timestamp
 			.is_some_and(|t| t >= clock.unix_timestamp)
-			|| self
-				.sale_end_timestamp
-				.is_some_and(|t| t <= clock.unix_timestamp)
 		{
 			Ok(())
 		} else {
@@ -100,9 +68,14 @@ impl WhitelistState {
 }
 
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, Debug, PartialEq)]
-pub struct UserData {
+pub struct Ticket {
 	pub bump: u8,
 	pub owner: Pubkey,
 	pub payer: Pubkey,
+	pub allowance: u64,
 	pub amount_bought: u64,
+}
+
+impl Ticket {
+	pub const LEN: usize = 82;
 }

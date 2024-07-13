@@ -12,6 +12,6 @@ pub fn get_whitelist_address(mint: &Pubkey) -> (Pubkey, u8) {
 	Pubkey::find_program_address(&[SEED, mint.as_ref()], &crate::id())
 }
 
-pub fn get_user_whitelist_address(user: &Pubkey, whitelist: &Pubkey) -> (Pubkey, u8) {
+pub fn get_user_ticket_address(user: &Pubkey, whitelist: &Pubkey) -> (Pubkey, u8) {
 	Pubkey::find_program_address(&[SEED, user.as_ref(), whitelist.as_ref()], &crate::id())
 }
