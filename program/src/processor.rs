@@ -1429,147 +1429,147 @@ mod tests {
 		(whitelist, vault, mint_keypair, treasury)
 	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_init_whitelist(token_program_id: Pubkey) {
-	//	let treasury_keypair = Keypair::new();
-	//	let mint_keypair = Keypair::new();
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_init_whitelist(token_program_id: Pubkey) {
+		let treasury_keypair = Keypair::new();
+		let mint_keypair = Keypair::new();
 
-	//	let (whitelist, _) = get_whitelist_address(&mint_keypair.pubkey());
+		let (whitelist, _) = get_whitelist_address(&mint_keypair.pubkey());
 
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
 
-	//	create_mint(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&mint_keypair,
-	//		&token_program_id,
-	//		9,
-	//	)
-	//	.await;
+		create_mint(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&mint_keypair,
+			&token_program_id,
+			9,
+		)
+		.await;
 
-	//	let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
-	//		&whitelist,
-	//		&mint_keypair.pubkey(),
-	//		&token_program_id,
-	//	);
+		let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
+			&whitelist,
+			&mint_keypair.pubkey(),
+			&token_program_id,
+		);
 
-	//	let token_price = 1;
-	//	let buy_limit = 10;
-	//	let whitelist_size = 5;
-	//	let allow_registration = true;
-	//	let registration_start_timestamp = 0;
-	//	let registration_duration = 0;
-	//	let sale_start_timestamp = 0;
-	//	let sale_duration = 0;
+		let token_price = 1;
+		let buy_limit = 10;
+		let whitelist_size = 5;
+		let allow_registration = true;
+		let registration_start_timestamp = 0;
+		let registration_duration = 0;
+		let sale_start_timestamp = 0;
+		let sale_duration = 0;
 
-	//	let ix = crate::instructions::init_whitelist(
-	//		&whitelist,
-	//		&payer.pubkey(),
-	//		&vault,
-	//		&mint_keypair.pubkey(),
-	//		&treasury_keypair.pubkey(),
-	//		token_price,
-	//		buy_limit,
-	//		whitelist_size,
-	//		allow_registration,
-	//		registration_start_timestamp,
-	//		registration_duration,
-	//		sale_start_timestamp,
-	//		sale_duration,
-	//		&token_program_id,
-	//	)
-	//	.unwrap();
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//	let whitelist_account = banks_client
-	//		.get_account(whitelist)
-	//		.await
-	//		.expect("get_account")
-	//		.expect("whitelist account not none");
-	//	let rent = banks_client.get_rent().await.unwrap();
-	//	assert_eq!(whitelist_account.data.len(), Whitelist::LEN);
-	//	assert_eq!(whitelist_account.owner, crate::id());
-	//	assert_eq!(
-	//		whitelist_account.lamports,
-	//		rent.minimum_balance(Whitelist::LEN)
-	//	);
-	//}
+		let ix = crate::instructions::init_whitelist(
+			&whitelist,
+			&payer.pubkey(),
+			&vault,
+			&mint_keypair.pubkey(),
+			&treasury_keypair.pubkey(),
+			token_price,
+			buy_limit,
+			whitelist_size,
+			allow_registration,
+			registration_start_timestamp,
+			registration_duration,
+			sale_start_timestamp,
+			sale_duration,
+			&token_program_id,
+		)
+		.unwrap();
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+		let whitelist_account = banks_client
+			.get_account(whitelist)
+			.await
+			.expect("get_account")
+			.expect("whitelist account not none");
+		let rent = banks_client.get_rent().await.unwrap();
+		assert_eq!(whitelist_account.data.len(), Whitelist::LEN);
+		assert_eq!(whitelist_account.owner, crate::id());
+		assert_eq!(
+			whitelist_account.lamports,
+			rent.minimum_balance(Whitelist::LEN)
+		);
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_add_user(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _, mint, _) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_add_user(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _, mint, _) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let user_keypair = Keypair::new();
-	//	let (user_ticket, _) = get_user_ticket_address(&user_keypair.pubkey(), &whitelist);
-	//	let ix = crate::instructions::add_user(
-	//		&whitelist,
-	//		&payer.pubkey(),
-	//		&mint.pubkey(),
-	//		&user_keypair.pubkey(),
-	//		&user_ticket,
-	//	)
-	//	.unwrap();
+		let user_keypair = Keypair::new();
+		let (user_ticket, _) = get_user_ticket_address(&user_keypair.pubkey(), &whitelist);
+		let ix = crate::instructions::add_user(
+			&whitelist,
+			&payer.pubkey(),
+			&mint.pubkey(),
+			&user_keypair.pubkey(),
+			&user_ticket,
+		)
+		.unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_remove_user(token_program_id: Pubkey) {
-	//	let user_keypair = Keypair::new();
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_remove_user(token_program_id: Pubkey) {
+		let user_keypair = Keypair::new();
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let (user_ticket, _) = get_user_ticket_address(&user_keypair.pubkey(), &whitelist);
+		let (user_ticket, _) = get_user_ticket_address(&user_keypair.pubkey(), &whitelist);
 
-	//	let add_ix = crate::instructions::add_user(
-	//		&whitelist,
-	//		&payer.pubkey(),
-	//		&mint.pubkey(),
-	//		&user_keypair.pubkey(),
-	//		&user_ticket,
-	//	)
-	//	.unwrap();
+		let add_ix = crate::instructions::add_user(
+			&whitelist,
+			&payer.pubkey(),
+			&mint.pubkey(),
+			&user_keypair.pubkey(),
+			&user_ticket,
+		)
+		.unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[add_ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[&payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
+		let mut transaction = Transaction::new_with_payer(&[add_ix], Some(&payer.pubkey()));
+		transaction.sign(&[&payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
 
-	//	let remove_ix = crate::instructions::remove_user(
-	//		&whitelist,
-	//		&payer.pubkey(),
-	//		&mint.pubkey(),
-	//		&user_keypair.pubkey(),
-	//		&user_ticket,
-	//	)
-	//	.unwrap();
+		let remove_ix = crate::instructions::remove_user(
+			&whitelist,
+			&payer.pubkey(),
+			&mint.pubkey(),
+			&user_keypair.pubkey(),
+			&user_ticket,
+		)
+		.unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[remove_ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[remove_ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 
 	#[test_case(spl_token::id() ; "Token Program")]
 	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
@@ -1619,214 +1619,214 @@ mod tests {
 		banks_client.process_transaction(transaction).await.unwrap();
 	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_amend_whitelist_size(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_amend_whitelist_size(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let ix =
-	//		crate::instructions::amend_whitelist_size(&whitelist, &payer.pubkey(), 42).unwrap();
+		let ix =
+			crate::instructions::amend_whitelist_size(&whitelist, &payer.pubkey(), 42).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_amend_times(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_amend_times(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let ix = crate::instructions::amend_times(
-	//		&whitelist,
-	//		&payer.pubkey(),
-	//		None,
-	//		Some(259200000),
-	//		None,
-	//		Some(604800000),
-	//	)
-	//	.unwrap();
+		let ix = crate::instructions::amend_times(
+			&whitelist,
+			&payer.pubkey(),
+			None,
+			Some(259200000),
+			None,
+			Some(604800000),
+		)
+		.unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_allow_registration_false(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_allow_registration_false(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let ix_false =
-	//		crate::instructions::allow_registration(&whitelist, &payer.pubkey(), false).unwrap();
+		let ix_false =
+			crate::instructions::allow_registration(&whitelist, &payer.pubkey(), false).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix_false], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
+		let mut transaction = Transaction::new_with_payer(&[ix_false], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
 
-	//	let whitelist_account = banks_client
-	//		.get_account(whitelist)
-	//		.await
-	//		.expect("get_account")
-	//		.expect("whitelist account not none");
-	//	let wl_data = Whitelist::try_from_slice(&whitelist_account.data[..]).unwrap();
-	//	assert_eq!(wl_data.allow_registration, false);
-	//}
+		let whitelist_account = banks_client
+			.get_account(whitelist)
+			.await
+			.expect("get_account")
+			.expect("whitelist account not none");
+		let wl_data = Whitelist::try_from_slice(&whitelist_account.data[..]).unwrap();
+		assert_eq!(wl_data.allow_registration, false);
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_allow_registration_true(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_allow_registration_true(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let ix_true =
-	//		crate::instructions::allow_registration(&whitelist, &payer.pubkey(), true).unwrap();
+		let ix_true =
+			crate::instructions::allow_registration(&whitelist, &payer.pubkey(), true).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix_true], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
+		let mut transaction = Transaction::new_with_payer(&[ix_true], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
 
-	//	let whitelist_account = banks_client
-	//		.get_account(whitelist)
-	//		.await
-	//		.expect("get_account")
-	//		.expect("whitelist account not none");
-	//	let wl_data = Whitelist::try_from_slice(&whitelist_account.data[..]).unwrap();
-	//	assert_eq!(wl_data.allow_registration, true);
-	//}
+		let whitelist_account = banks_client
+			.get_account(whitelist)
+			.await
+			.expect("get_account")
+			.expect("whitelist account not none");
+		let wl_data = Whitelist::try_from_slice(&whitelist_account.data[..]).unwrap();
+		assert_eq!(wl_data.allow_registration, true);
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_register(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_register(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let user = Keypair::new();
-	//	let (ticket, _) = get_user_ticket_address(&user.pubkey(), &whitelist);
+		let user = Keypair::new();
+		let (ticket, _) = get_user_ticket_address(&user.pubkey(), &whitelist);
 
-	//	// Test ticket does not exist
-	//	assert_eq!(
-	//		banks_client.get_account(ticket).await.expect("get_account"),
-	//		None,
-	//	);
+		// Test ticket does not exist
+		assert_eq!(
+			banks_client.get_account(ticket).await.expect("get_account"),
+			None,
+		);
 
-	//	let ix = crate::instructions::register(&whitelist, &user.pubkey(), &ticket).unwrap();
+		let ix = crate::instructions::register(&whitelist, &user.pubkey(), &ticket).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&user.pubkey()));
-	//	transaction.sign(&[user], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&user.pubkey()));
+		transaction.sign(&[user], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
 
-	//	let ticket_account = banks_client
-	//		.get_account(ticket)
-	//		.await
-	//		.expect("get_account")
-	//		.expect("associated_account not none");
+		let ticket_account = banks_client
+			.get_account(ticket)
+			.await
+			.expect("get_account")
+			.expect("associated_account not none");
 
-	//	let rent = Rent::get().unwrap();
-	//	assert_eq!(ticket_account.data.len(), Ticket::LEN);
-	//	assert_eq!(ticket_account.owner, crate::id());
-	//	assert_eq!(ticket_account.lamports, rent.minimum_balance(Ticket::LEN));
-	//}
+		let rent = Rent::get().unwrap();
+		assert_eq!(ticket_account.data.len(), Ticket::LEN);
+		assert_eq!(ticket_account.owner, crate::id());
+		assert_eq!(ticket_account.lamports, rent.minimum_balance(Ticket::LEN));
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_unregister(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, vault, mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_unregister(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let user = Keypair::new();
-	//	let (ticket, _) = get_user_ticket_address(&user.pubkey(), &whitelist);
+		let user = Keypair::new();
+		let (ticket, _) = get_user_ticket_address(&user.pubkey(), &whitelist);
 
-	//	let ix_true =
-	//		crate::instructions::register(&whitelist, &user.pubkey(), &ticket).unwrap();
+		let ix_true =
+			crate::instructions::register(&whitelist, &user.pubkey(), &ticket).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix_true], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[ix_true], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_start_registration(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_start_registration(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let ix = crate::instructions::start_registration(&whitelist, &payer.pubkey()).unwrap();
+		let ix = crate::instructions::start_registration(&whitelist, &payer.pubkey()).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 
-	//#[test_case(spl_token::id() ; "Token Program")]
-	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	//#[tokio::test]
-	//async fn test_start_token_sale(token_program_id: Pubkey) {
-	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-	//	let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
-	//		&mut banks_client,
-	//		&payer,
-	//		&recent_blockhash,
-	//		&token_program_id,
-	//	)
-	//	.await;
+	#[test_case(spl_token::id() ; "Token Program")]
+	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	#[tokio::test]
+	async fn test_start_token_sale(token_program_id: Pubkey) {
+		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
+			&mut banks_client,
+			&payer,
+			&recent_blockhash,
+			&token_program_id,
+		)
+		.await;
 
-	//	let ix = crate::instructions::start_registration(&whitelist, &payer.pubkey()).unwrap();
+		let ix = crate::instructions::start_registration(&whitelist, &payer.pubkey()).unwrap();
 
-	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-	//	transaction.sign(&[payer], recent_blockhash);
-	//	banks_client.process_transaction(transaction).await.unwrap();
-	//}
+		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+		transaction.sign(&[payer], recent_blockhash);
+		banks_client.process_transaction(transaction).await.unwrap();
+	}
 }
