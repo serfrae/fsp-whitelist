@@ -31,7 +31,8 @@ enum Commands {
 	/// Initialise a whitelist
 	///
 	/// This command will initialise a whitelist, the <MINT>, <TREASURY>, <PRICE> and <BUY_LIMIT>
-	/// fields are all required, other fields can later be amended or provided using --<FIELD NAME>
+	/// fields are all required, other fields can be provided using --<FIELD_NAME> <VALUE> or
+	/// later amended using <AMEND>
 	Init(Init),
 
 	/// Add/Remove users from the whitelist
@@ -56,7 +57,10 @@ enum Commands {
 
 	/// Terminate the whitelist and send tokens to the recipient
 	Close {
+        /// Mint of the token sale
 		mint: Pubkey,
+
+        /// Address to send tokens/SOL to, if `None` then defaults to authority wallet
 		recipient: Option<Pubkey>,
 	},
 
@@ -69,6 +73,7 @@ enum Commands {
 enum UserManagement {
 	/// Add a user to the whitelist
 	Add(UserManagementCommonFields),
+
 	/// Remove a user from the whitelist and claim rent
 	Remove(UserManagementCommonFields),
 }
@@ -77,6 +82,7 @@ enum UserManagement {
 struct UserManagementCommonFields {
 	/// Public key of the mint of the token associated with the whitelist
 	mint: Pubkey,
+
 	/// Public key of the user
 	user: Pubkey,
 }
@@ -121,20 +127,36 @@ enum Method {
 	Single(TicketFields),
 
 	/// Withdraw from all tickets associated with the whitelist
-	Bulk { mint: Pubkey },
+	Bulk { 
+        /// Mint of the token sale
+        mint: Pubkey 
+    },
 }
 
 #[derive(Subcommand, Debug)]
 enum Detail {
+    /// Amend registration/sale times/duration
 	Times {
 		mint: Pubkey,
+		/// Unixtimestamp when registration for the whitelist commences
 		registration_start_time: Option<String>,
+
+		/// Duration in milliseconds when users can register for the whitelist
 		registration_end_time: Option<String>,
+
+		/// Unixtimestamp when the token sale commences
 		sale_start_time: Option<String>,
+
+		/// Duration in milliseconds of the token sale
 		sale_end_time: Option<String>,
 	},
+
+    /// Amend whitelist size
 	Size {
+        /// Mint of the token sale
 		mint: Pubkey,
+
+        /// Desired whitelist size. `None` == no limit
 		size: Option<u64>,
 	},
 }
@@ -151,13 +173,25 @@ enum Start {
 #[derive(Subcommand, Debug)]
 enum Registration {
 	/// Permit/Deny registration to the whitelist
-	Allow { mint: Pubkey, allow: bool },
+	Allow {
+		/// Mint of the token sale
+		mint: Pubkey,
+
+		/// true: allow registration. false: freeze/deny registration
+		allow: bool,
+	},
 
 	/// Register to the whitelist
-	Register { mint: Pubkey },
+	Register {
+		/// Mint of the token sale
+		mint: Pubkey,
+	},
 
 	/// Unregister from the whitelist and claim rent
-	Unregister { mint: Pubkey },
+	Unregister {
+		/// Mint of the token sale
+		mint: Pubkey,
+	},
 }
 
 #[derive(Subcommand, Debug)]
@@ -166,15 +200,22 @@ enum Info {
 	Whitelist { mint: Pubkey },
 
 	/// Get user info
-	User { mint: Pubkey, user: Pubkey },
+	User {
+		/// Mint of the token sale
+		mint: Pubkey,
+		/// User ticket address
+		user: Pubkey,
+	},
 }
 
 #[derive(Args, Debug)]
 struct TokenFields {
 	/// Mint of the token associated with the whitelist
 	mint: Pubkey,
+
 	/// The wallet address that will receive the tokens
 	recipient: Option<Pubkey>,
+
 	/// Amount of tokens you wish to transfer
 	amount: u64,
 }
@@ -182,6 +223,7 @@ struct TokenFields {
 struct TicketFields {
 	/// Mint of the token
 	mint: Pubkey,
+
 	/// A user's public key
 	user: Pubkey,
 }
@@ -190,30 +232,39 @@ struct TicketFields {
 struct Init {
 	/// Mint of the token that is to be sold
 	mint: Pubkey,
+
 	/// Address that will receive the proceeds of the sale
 	treasury: Pubkey,
+
 	/// Price of the token in SOL
 	price: u64,
+
 	/// Number of tokens a whitelist member can purchase
 	buy_limit: u64,
+
 	/// The number of subscribers allowed in the whitelist
 	#[clap(long)]
 	whitelist_size: Option<u64>,
+
 	/// Allow users to register
 	///
 	/// This flag has two purposes, it can freeze an ongoing registration, or permit
 	/// only the authority to add members to the whitelist
 	#[clap(long)]
 	allow_registration: Option<bool>,
+
 	/// Unixtimestamp of the start of whitelist registration
 	#[clap(long)]
 	registration_start_time: Option<String>,
+
 	/// Duration in milliseconds of whitelist registration
 	#[clap(long)]
 	registration_end_time: Option<String>,
+
 	/// Unixtimestamp of the start of the token sale
 	#[clap(long)]
 	sale_start_time: Option<String>,
+
 	/// Duration in milliseconds of the token sale
 	#[clap(long)]
 	sale_end_time: Option<String>,
