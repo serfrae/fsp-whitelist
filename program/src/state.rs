@@ -70,6 +70,7 @@ impl Whitelist {
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, Debug, PartialEq)]
 pub struct Ticket {
 	pub bump: u8,
+    pub whitelist: Pubkey,
 	pub owner: Pubkey,
 	pub payer: Pubkey,
 	pub allowance: u64,
@@ -77,5 +78,5 @@ pub struct Ticket {
 }
 
 impl Ticket {
-	pub const LEN: usize = 82;
+	pub const LEN: usize = 124;
 }

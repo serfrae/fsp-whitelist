@@ -218,8 +218,8 @@ impl Processor {
 
 			Ok(())
 		} else {
-            return Err(WhitelistError::WhitelistAlreadyInitialized.into());
-        }
+			return Err(WhitelistError::WhitelistAlreadyInitialized.into());
+		}
 	}
 
 	fn process_add_user(accounts: &[AccountInfo]) -> ProgramResult {
@@ -286,6 +286,7 @@ impl Processor {
 
 		let ticket_data = Ticket {
 			bump: user_bump,
+			whitelist: *whitelist_account.key,
 			owner: *user_account.key,
 			allowance: wl_data.buy_limit,
 			payer: *authority.key,
@@ -505,6 +506,7 @@ impl Processor {
 
 		let ticket_data = Ticket {
 			bump: user_bump,
+			whitelist: *whitelist_account.key,
 			owner: *user_account.key,
 			allowance: wl_data.buy_limit,
 			payer: *user_account.key,
@@ -527,6 +529,8 @@ impl Processor {
 		let ticket_token_account = next_account_info(accounts_iter)?;
 		let token_program = next_account_info(accounts_iter)?;
 		let system_program = next_account_info(accounts_iter)?;
+
+		let clock = Clock::get()?;
 
 		let (user_ticket, user_bump) =
 			get_user_ticket_address(&user_account.key, &whitelist_account.key);
@@ -552,6 +556,24 @@ impl Processor {
 
 		if system_program.key != &system_program::id() {
 			return Err(ProgramError::IncorrectProgramId);
+		}
+
+		// As this PDA is expected to hold funds, and registration spaces are limited, a user
+		// should only be able to unregister during the registration period, if the registration
+		// period is occuring in parallel to the the sale period then a user should not be able to
+		// unregister, we could check for lamports in excess of the minimum balance, but it is
+		// simpler to not permit the user to unregister once a token sale has begun.
+		if wl_data.registration_start_timestamp.is_some_and(|t| {
+			wl_data
+				.registration_duration
+				.is_some_and(|u| t + u < clock.unix_timestamp)
+		}) || wl_data
+			.sale_start_timestamp
+			.is_some_and(|t| t < clock.unix_timestamp)
+			|| wl_data.registration_duration.is_none()
+			|| wl_data.sale_duration.is_none()
+		{
+			return Err(WhitelistError::CannotUnregister.into());
 		}
 
 		// Check if the ticket token account exists if it does, we will transfer all the tokens
@@ -662,9 +684,6 @@ impl Processor {
 
 		let token_amount =
 			spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
-
-		let (wl, _wl_bump) = get_whitelist_address(&mint.key);
-		let (user_ticket, user_bump) = get_user_ticket_address(&user_account.key, &wl);
 
 		if !user_account.is_signer {
 			return Err(WhitelistError::SignerError.into());

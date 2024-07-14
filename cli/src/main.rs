@@ -5,8 +5,9 @@ use {
 	clap::{command, Args, Parser, Subcommand},
 	solana_cli_config,
 	solana_client::rpc_client::RpcClient,
-	solana_program::{instruction::Instruction, pubkey::Pubkey},
+	solana_program::{instruction::Instruction, pubkey::Pubkey, system_instruction},
 	solana_sdk::{
+		account::Account,
 		commitment_config::CommitmentConfig,
 		signature::{read_keypair_file, Signer},
 		transaction::Transaction,
@@ -69,8 +70,23 @@ enum Token {
 
 #[derive(Subcommand, Debug)]
 enum TokenType {
-	Token(TokenFields),
-	Sol(TokenFields),
+	#[command(subcommand)]
+	Token(Source),
+	#[command(subcommand)]
+	Sol(Source),
+}
+
+#[derive(Subcommand, Debug)]
+enum Source {
+	Vault(TokenFields),
+	#[command(subcommand)]
+	Ticket(Method),
+}
+
+#[derive(Subcommand, Debug)]
+enum Method {
+	Single(TicketFields),
+	Bulk { mint: Pubkey },
 }
 
 #[derive(Subcommand, Debug)]
@@ -109,10 +125,14 @@ enum Info {
 
 #[derive(Args, Debug)]
 struct TokenFields {
-	whitelist: Pubkey,
-	mint: Option<Pubkey>,
+	mint: Pubkey,
 	recipient: Option<Pubkey>,
 	amount: u64,
+}
+#[derive(Args, Clone, Debug)]
+struct TicketFields {
+	mint: Pubkey,
+	user: Pubkey,
 }
 
 #[derive(Args, Debug)]
@@ -231,29 +251,29 @@ fn main() -> Result<()> {
 		},
 		Commands::Token(subcmd) => match subcmd {
 			Token::Buy(fields) => {
-				let mint = match fields.mint {
-					Some(mint) => mint,
-					None => return Err(anyhow!("Please provide the token mint pubkey")),
-				};
-				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &fields.whitelist);
+				let (whitelist, _) = get_whitelist_address(&fields.mint);
+				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
 
 				let ticket_token_account =
-					spl_associated_token_account::get_associated_token_address(&user_ticket, &mint);
+					spl_associated_token_account::get_associated_token_address(
+						&user_ticket,
+						&fields.mint,
+					);
 
 				let vault = spl_associated_token_account::get_associated_token_address(
-					&mint,
-					&fields.whitelist,
+					&whitelist,
+					&fields.mint,
 				);
 
 				let user_token_account = spl_associated_token_account::get_associated_token_address(
-					&mint,
 					&wallet_pubkey,
+					&fields.mint,
 				);
 
 				instructions::buy_tokens(
-					&fields.whitelist,
+					&whitelist,
 					&vault,
-					&mint,
+					&fields.mint,
 					&wallet_pubkey,
 					&user_ticket,
 					&ticket_token_account,
@@ -263,70 +283,110 @@ fn main() -> Result<()> {
 				.map_err(|err| anyhow!("Unable to create `BuyTokens` instruction: {}", err))?
 			}
 			Token::Deposit(fields) => {
-				let mint = match fields.mint {
-					Some(mint) => mint,
-					None => return Err(anyhow!("Please provide the token mint pubkey")),
-				};
+				let (whitelist, _) = get_whitelist_address(&fields.mint);
 				let vault = spl_associated_token_account::get_associated_token_address(
-					&mint,
-					&fields.whitelist,
+					&whitelist,
+					&fields.mint,
 				);
 				let user_token_account = spl_associated_token_account::get_associated_token_address(
-					&mint,
 					&wallet_pubkey,
+					&fields.mint,
 				);
 				instructions::deposit_tokens(
-					&fields.whitelist,
+					&whitelist,
 					&vault,
 					&wallet_pubkey,
 					&user_token_account,
-					&mint,
+					&fields.mint,
 					fields.amount,
 				)
 				.map_err(|err| anyhow!("Unable to create `DepositTokens` instruction: {}", err))?
 			}
 			Token::Withdraw(token_type) => match token_type {
-				TokenType::Token(fields) => {
-					let mint = match fields.mint {
-						Some(mint) => mint,
-						None => return Err(anyhow!("Please provide the token mint pubkey")),
-					};
-					let vault = spl_associated_token_account::get_associated_token_address(
-						&mint,
-						&fields.whitelist,
-					);
-					let recipient = match fields.recipient {
-						Some(r) => r,
-						None => wallet_pubkey,
-					};
-					let token_account = spl_associated_token_account::get_associated_token_address(
-						&mint, &recipient,
-					);
-					instructions::withdraw_tokens(
-						&fields.whitelist,
-						&wallet_pubkey,
-						&vault,
-						&mint,
-						&token_account,
-						fields.amount,
-					)
-					.map_err(|err| {
-						anyhow!("Unable to create `WithdrawTokens` instruction: {}", err)
-					})?
-				}
-				TokenType::Sol(fields) => {
-					let recipient = match fields.recipient {
-						Some(r) => r,
-						None => wallet_pubkey,
-					};
-					instructions::withdraw_sol(
-						&fields.whitelist,
-						&wallet_pubkey,
-						&recipient,
-						fields.amount,
-					)
-					.map_err(|err| anyhow!("Unable to create `WithdrawSol` instruction: {}", err))?
-				}
+				TokenType::Token(source) => match source {
+					Source::Vault(fields) => {
+						let (whitelist, _) = get_whitelist_address(&fields.mint);
+
+						let vault = spl_associated_token_account::get_associated_token_address(
+							&whitelist,
+							&fields.mint,
+						);
+						let recipient = match fields.recipient {
+							Some(r) => r,
+							None => wallet_pubkey,
+						};
+						let token_account =
+							spl_associated_token_account::get_associated_token_address(
+								&recipient,
+								&fields.mint,
+							);
+						instructions::withdraw_tokens(
+							&whitelist,
+							&wallet_pubkey,
+							&vault,
+							&fields.mint,
+							&token_account,
+							fields.amount,
+						)
+						.map_err(|err| {
+							anyhow!("Unable to create `WithdrawTokens` instruction: {}", err)
+						})?
+					}
+					Source::Ticket(method) => match method {
+						Method::Single(fields) => {
+							let (whitelist, _) = get_whitelist_address(&fields.mint);
+							let (ticket, _) = get_user_ticket_address(&fields.user, &whitelist);
+							unimplemented!();
+						}
+						Method::Bulk { mint } => unimplemented!(),
+					},
+				},
+				TokenType::Sol(source) => match source {
+					Source::Vault(fields) => {
+						let (whitelist, _) = get_whitelist_address(&fields.mint);
+						let recipient = match fields.recipient {
+							Some(r) => r,
+							None => wallet_pubkey,
+						};
+						instructions::withdraw_sol(
+							&whitelist,
+							&wallet_pubkey,
+							&recipient,
+							fields.amount,
+						)
+						.map_err(|err| {
+							anyhow!("Unable to create `WithdrawSol` instruction: {}", err)
+						})?
+					}
+					Source::Ticket(method) => match method {
+						Method::Single(fields) => unimplemented!(),
+						Method::Bulk { mint } => {
+							let (whitelist, _) = get_whitelist_address(&mint);
+							let whitelist_account_data = client.get_account_data(&whitelist)?;
+							let wl_data =
+								stuk_wl::state::Whitelist::try_from_slice(&whitelist_account_data)?;
+
+							let program_accounts = client.get_program_accounts(&stuk_wl::id())?;
+							let mut whitelist_accounts = Vec::new();
+							// May want to split the returned array into chunks for parallel
+							// processing and the reconstruct when done
+							for (pubkey, account) in program_accounts.iter() {
+								let data = stuk_wl::state::Ticket::try_from_slice(&account.data)?;
+								if data.whitelist == whitelist {
+									whitelist_accounts.push((pubkey, account, data));
+								}
+							}
+							// Depending on the size of this array we may want to split into
+							// threads depending on number of cores on a machine to parallel
+							// execute the withdrawals to reduce execution time for now let's
+							// just do this single threadedly
+							for (pubkey, account, data) in whitelist_accounts {
+								unimplemented!();
+							}
+							std::process::exit(1);
+						}
+					},
+				},
 			},
 		},
 		Commands::Amend(detail) => match detail {
@@ -479,6 +539,7 @@ fn main() -> Result<()> {
 				println!("Ticket payer: {}", d.payer);
 				println!("Ticket allowance: {}", d.allowance);
 				println!("Amount purchased: {}", d.amount_bought);
+
 				std::process::exit(1);
 			}
 		},
@@ -492,7 +553,7 @@ fn main() -> Result<()> {
 	let txid = client
 		.send_and_confirm_transaction_with_spinner(&transaction)
 		.map_err(|err| anyhow!("Unable to send transaction: {}", err))?;
-    println!("TXID: {}", txid);
+	println!("TXID: {}", txid);
 	Ok(())
 }
 

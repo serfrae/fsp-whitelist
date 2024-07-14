@@ -35,12 +35,14 @@ pub enum WhitelistError {
 	IncorrectPayer,
 	#[error("Sale Has Not Started")]
 	SaleNotStarted,
-    #[error("Sale has ended")]
-    SaleEnded,
-    #[error("Registration has not started")]
-    RegistrationNotStarted,
-    #[error("Registration has finished")]
-    RegistrationFinished,
+	#[error("Sale has ended")]
+	SaleEnded,
+	#[error("Registration has not started")]
+	RegistrationNotStarted,
+	#[error("Registration has finished")]
+	RegistrationFinished,
+	#[error("Cannot unregister")]
+	CannotUnregister,
 	#[error("Illegal Mint Owner")]
 	IllegalMintOwner,
 	#[error("Unauthorised Access")]
@@ -59,14 +61,14 @@ pub enum WhitelistError {
 	InvalidSaleStartTime,
 	#[error("Sale begins before registration")]
 	SaleBeforeRegistration,
-    #[error("Registration has started")]
-    RegistrationStarted,
-    #[error("Token sale has commenced")]
-    SaleStarted,
-    #[error("Sale is still ongoing")]
-    SaleOngoing,
-    #[error("Buy limit exceeded")]
-    BuyLimitExceeded,
+	#[error("Registration has started")]
+	RegistrationStarted,
+	#[error("Token sale has commenced")]
+	SaleStarted,
+	#[error("Sale is still ongoing")]
+	SaleOngoing,
+	#[error("Buy limit exceeded")]
+	BuyLimitExceeded,
 	#[error("Overflow")]
 	Overflow,
 }
