@@ -19,7 +19,7 @@ After cloning the repo navigate into it:
 
 To setup the CLI and deploy the program, an installation script has been provided for your convenience,
 please ensure to change the wallet addresses to the path of the wallet you wish to use for the program-id and mints.
-The script will automatically utilise the wallet found at $XDG_CONFIG_HOME/solana/id.json as the authority.
+The script will automatically utilise the wallet found at `$XDG_CONFIG_HOME/solana/id.json` as the authority.
 
 After you have edited the script with your desired addresses/wallets use:
 
@@ -44,6 +44,8 @@ There are only four (4) commands relevant to a whitelist subscriber in the CLI t
 1. stuk-wl register <MINT>
 2. stuk-wl unregister <MINT>
 3. stuk-wl buy <MINT> <AMOUNT>
-3. stukw-wl info whitelist/ticket <MINT>
+3. stukw-wl info whitelist/user <PUBKEY> <MINT>
 ```
+
+`<MINT>` is the token you wish to register/purchase, the CLI will compute the whitelist address for you and any other necessary public keys required by the program.
 
