@@ -34,93 +34,93 @@ enum Commands {
 	/// fields are all required, other fields can later be amended or provided using --<FIELD NAME>
 	Init(Init),
 
-    /// Add/Remove users from the whitelist
+	/// Add/Remove users from the whitelist
 	#[command(subcommand)]
 	User(UserManagement),
 
-    /// Token operations - buy/deposit/withdraw
+	/// Token operations - buy/deposit/withdraw
 	#[command(subcommand)]
 	Token(Token),
 
-    /// Amend whitelist size or registration/token sale times/duration
+	/// Amend whitelist size or registration/token sale times/duration
 	#[command(subcommand)]
 	Amend(Detail),
 
-    /// Commence registration/token sale
+	/// Commence registration/token sale
 	#[command(subcommand)]
 	Start(Start),
-    
-    /// Register/unregister to/from the whitelist
+
+	/// Register/unregister to/from the whitelist
 	#[command(subcommand)]
 	Register(Registration),
 
-    /// Terminate the whitelist and send tokens to the recipient
+	/// Terminate the whitelist and send tokens to the recipient
 	Close {
 		mint: Pubkey,
 		recipient: Option<Pubkey>,
 	},
 
-    /// Get info about the whitelist or a specific ticket
+	/// Get info about the whitelist or a specific ticket
 	#[command(subcommand)]
 	Info(Info),
 }
 
 #[derive(Subcommand, Debug)]
 enum UserManagement {
-    /// Add a user to the whitelist
+	/// Add a user to the whitelist
 	Add(UserManagementCommonFields),
-    /// Remove a user from the whitelist and claim rent
+	/// Remove a user from the whitelist and claim rent
 	Remove(UserManagementCommonFields),
 }
 
 #[derive(Args, Debug)]
 struct UserManagementCommonFields {
-    /// Public key of the mint of the token associated with the whitelist
+	/// Public key of the mint of the token associated with the whitelist
 	mint: Pubkey,
-    /// Public key of the user
+	/// Public key of the user
 	user: Pubkey,
 }
 
 #[derive(Subcommand, Debug)]
 enum Token {
-    /// Buy tokens
+	/// Buy tokens
 	Buy(TokenFields),
 
-    /// Deposit tokens into the vault
+	/// Deposit tokens into the vault
 	Deposit(TokenFields),
 
-    /// Withdraw tokens - authority only
+	/// Withdraw tokens - authority only
 	#[command(subcommand)]
 	Withdraw(TokenType),
 }
 
 #[derive(Subcommand, Debug)]
 enum TokenType {
-    /// The token that is sold by the whitelist
+	/// The token that is sold by the whitelist
 	#[command(subcommand)]
 	Token(Source),
 
-    /// SOL used to purchase the token
+	/// SOL used to purchase the token
 	#[command(subcommand)]
 	Sol(Source),
 }
 
 #[derive(Subcommand, Debug)]
 enum Source {
-    /// Withdraw from the token vault
+	/// Withdraw from the token vault
 	Vault(TokenFields),
 
-    /// Withdraw from ticket accounts
+	/// Withdraw from ticket accounts
 	#[command(subcommand)]
 	Ticket(Method),
 }
 
 #[derive(Subcommand, Debug)]
 enum Method {
-    /// Withdraw from a single ticket instance
+	/// Withdraw from a single ticket instance
 	Single(TicketFields),
 
-    /// Withdraw from all tickets associated with the whitelist
+	/// Withdraw from all tickets associated with the whitelist
 	Bulk { mint: Pubkey },
 }
 
@@ -141,41 +141,41 @@ enum Detail {
 
 #[derive(Subcommand, Debug)]
 enum Start {
-    /// Commences registration
+	/// Commences registration
 	Registration { mint: Pubkey },
 
-    /// Commences the token sale
+	/// Commences the token sale
 	Sale { mint: Pubkey },
 }
 
 #[derive(Subcommand, Debug)]
 enum Registration {
-    /// Permit/Deny registration to the whitelist
+	/// Permit/Deny registration to the whitelist
 	Allow { mint: Pubkey, allow: bool },
 
-    /// Register to the whitelist
+	/// Register to the whitelist
 	Register { mint: Pubkey },
 
-    /// Unregister from the whitelist and claim rent
+	/// Unregister from the whitelist and claim rent
 	Unregister { mint: Pubkey },
 }
 
 #[derive(Subcommand, Debug)]
 enum Info {
-    /// Get whitelist info
+	/// Get whitelist info
 	Whitelist { mint: Pubkey },
 
-    /// Get user info
+	/// Get user info
 	User { mint: Pubkey, user: Pubkey },
 }
 
 #[derive(Args, Debug)]
 struct TokenFields {
-    /// Mint of the token associated with the whitelist
+	/// Mint of the token associated with the whitelist
 	mint: Pubkey,
-    /// The wallet address that will receive the tokens
+	/// The wallet address that will receive the tokens
 	recipient: Option<Pubkey>,
-    /// Amount of tokens you wish to transfer
+	/// Amount of tokens you wish to transfer
 	amount: u64,
 }
 #[derive(Args, Clone, Debug)]
@@ -205,16 +205,16 @@ struct Init {
 	/// only the authority to add members to the whitelist
 	#[clap(long)]
 	allow_registration: Option<bool>,
-    /// Unixtimestamp of the start of whitelist registration
+	/// Unixtimestamp of the start of whitelist registration
 	#[clap(long)]
 	registration_start_time: Option<String>,
-    /// Duration in milliseconds of whitelist registration
+	/// Duration in milliseconds of whitelist registration
 	#[clap(long)]
 	registration_end_time: Option<String>,
-    /// Unixtimestamp of the start of the token sale
+	/// Unixtimestamp of the start of the token sale
 	#[clap(long)]
 	sale_start_time: Option<String>,
-    /// Duration in milliseconds of the token sale
+	/// Duration in milliseconds of the token sale
 	#[clap(long)]
 	sale_end_time: Option<String>,
 }
@@ -531,6 +531,22 @@ fn main() -> Result<()> {
 			Registration::Register { mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);
 				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
+				let whitelist_data = client.get_account_data(&whitelist)?;
+				let wl_data = stuk_wl::state::Whitelist::try_from_slice(&whitelist_data)?;
+
+				if wl_data.whitelist_size.is_some_and(|n| {
+					let whitelist_accounts = client.get_program_accounts(&whitelist).unwrap();
+					let mut accounts = Vec::new();
+					for (pubkey, account) in whitelist_accounts {
+						if account.data.len() == stuk_wl::state::Ticket::LEN {
+							accounts.push(pubkey);
+						}
+					}
+					(n as usize) < accounts.len()
+				}) {
+					println!("Whitelist full");
+					std::process::exit(2);
+				}
 
 				instructions::register(&whitelist, &wallet_pubkey, &user_ticket)
 					.map_err(|err| anyhow!("Unable to create `Register` instruction: {}", err))?
