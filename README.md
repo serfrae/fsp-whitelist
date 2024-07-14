@@ -21,7 +21,11 @@ To setup the CLI and deploy the program, an installation script has been provide
 please ensure to change the wallet addresses to the path of the wallet you wish to use for the program-id and mints.
 The script will automatically utilise the wallet found at `$XDG_CONFIG_HOME/solana/id.json` as the authority.
 
-After you have edited the script with your desired addresses/wallets use:
+After you have edited the script with your desired addresses/wallets, ensure that it is executable using:
+
+```chmod +x install.sh```
+
+then install by using:
 
 ```./install.sh```
 
