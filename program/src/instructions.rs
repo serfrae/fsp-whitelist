@@ -27,8 +27,8 @@ pub enum WhitelistInstruction {
 	///  whitelist immediately after initialisation of the whitelist
 	///
 	///  `registration_duration`: an optional duration in milliseconds when registration for the
-	///  whitelist is allowed.  If set to `None` there will be no limit for when a user can register 
-    ///  for the whitelist
+	///  whitelist is allowed.  If set to `None` there will be no limit for when a user can register
+	///  for the whitelist
 	///
 	///  `buy_limit`: the amount of the token that can be bought by an individual user, there are
 	///  no checks against the whitelist size or amounts deposited into the vault vs this value
@@ -39,10 +39,10 @@ pub enum WhitelistInstruction {
 	///  then this value will be set to the value of the `registration_start_timestamp` which, if
 	///  also set to `None` will commence the token sale immediately upon initialisation
 	///
-	///  `sale_duration`: an optional duration in millsiseconds for the duration of the sale, this 
-    ///  value. This permits the withdrawal of any remaining tokens in the vault after the sale 
-    ///  time has elapsed. Failing to set this value will not allow termination of the whitelist
-    ///  until all tokens are sold (not recommended).
+	///  `sale_duration`: an optional duration in millsiseconds for the duration of the sale, this
+	///  value. This permits the withdrawal of any remaining tokens in the vault after the sale
+	///  time has elapsed. Failing to set this value will not allow termination of the whitelist
+	///  until all tokens are sold (not recommended).
 	///
 	/// Accounts expected:
 	///
@@ -52,6 +52,7 @@ pub enum WhitelistInstruction {
 	/// 3. `[]` Token mint
 	/// 4. `[]` Token program
 	/// 5. `[]` System program
+    /// 6. `[]` Assoc token program
 	InitialiseWhitelist {
 		treasury: Pubkey,
 		token_price: u64,
@@ -153,11 +154,11 @@ pub enum WhitelistInstruction {
 	///
 	/// 0. `[writable]` Whitelist account
 	/// 1. `[writable]` Authority
-    /// 2. `[writable]` Token vault
+	/// 2. `[writable]` Token vault
 	/// 3. `[]` Mint account
 	/// 4. `[writable, signer]` User account
 	/// 5. `[writable]` User whitelist account
-    /// 6. `[]` Token program
+	/// 6. `[]` Token program
 	/// 7. `[]` System program
 	Unregister,
 
@@ -299,14 +300,18 @@ pub fn init_whitelist(
 	sale_start_timestamp: Option<i64>,
 	sale_duration: Option<i64>,
 ) -> Result<Instruction, ProgramError> {
-	let mut accounts = Vec::with_capacity(6);
+	let mut accounts = Vec::with_capacity(7);
 
 	accounts.push(AccountMeta::new(*whitelist, false));
 	accounts.push(AccountMeta::new(*authority, true));
 	accounts.push(AccountMeta::new(*vault, false));
-	accounts.push(AccountMeta::new(*mint, false));
+	accounts.push(AccountMeta::new_readonly(*mint, false));
 	accounts.push(AccountMeta::new_readonly(spl_token_2022::id(), false));
 	accounts.push(AccountMeta::new_readonly(system_program::id(), false));
+	accounts.push(AccountMeta::new_readonly(
+		spl_associated_token_account::id(),
+		false,
+	));
 
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
@@ -485,22 +490,22 @@ pub fn register(
 pub fn unregister(
 	whitelist: &Pubkey,
 	authority: &Pubkey,
-    vault: &Pubkey,
-    mint: &Pubkey,
+	vault: &Pubkey,
+	mint: &Pubkey,
 	user: &Pubkey,
 	user_ticket: &Pubkey,
 	ticket_token_account: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
-	let mut accounts = Vec::with_capacity(8);
+	let mut accounts = Vec::with_capacity(9);
 
 	accounts.push(AccountMeta::new(*whitelist, false));
 	accounts.push(AccountMeta::new_readonly(*authority, false));
-    accounts.push(AccountMeta::new(*vault, false));
-    accounts.push(AccountMeta::new_readonly(*mint, false));
+	accounts.push(AccountMeta::new(*vault, false));
+	accounts.push(AccountMeta::new_readonly(*mint, false));
 	accounts.push(AccountMeta::new(*user, true));
 	accounts.push(AccountMeta::new(*user_ticket, false));
 	accounts.push(AccountMeta::new(*ticket_token_account, false));
-    accounts.push(AccountMeta::new_readonly(spl_token_2022::id(), false));
+	accounts.push(AccountMeta::new_readonly(spl_token_2022::id(), false));
 	accounts.push(AccountMeta::new_readonly(system_program::id(), false));
 
 	Ok(Instruction::new_with_borsh(
@@ -518,7 +523,7 @@ pub fn deposit_tokens(
 	mint: &Pubkey,
 	amount: u64,
 ) -> Result<Instruction, ProgramError> {
-	let mut accounts = Vec::with_capacity(8);
+	let mut accounts = Vec::with_capacity(6);
 
 	accounts.push(AccountMeta::new_readonly(*whitelist, false));
 	accounts.push(AccountMeta::new(*vault, false));
@@ -526,11 +531,6 @@ pub fn deposit_tokens(
 	accounts.push(AccountMeta::new(*depositor_token_account_key, false));
 	accounts.push(AccountMeta::new_readonly(*mint, false));
 	accounts.push(AccountMeta::new_readonly(spl_token_2022::id(), false));
-	accounts.push(AccountMeta::new_readonly(system_program::id(), false));
-	accounts.push(AccountMeta::new_readonly(
-		spl_associated_token_account::id(),
-		false,
-	));
 
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
@@ -631,7 +631,7 @@ pub fn withdraw_tokens(
 	recipient_token_account: &Pubkey,
 	amount: u64,
 ) -> Result<Instruction, ProgramError> {
-	let mut accounts = Vec::with_capacity(8);
+	let mut accounts = Vec::with_capacity(6);
 
 	accounts.push(AccountMeta::new_readonly(*whitelist, false));
 	accounts.push(AccountMeta::new(*authority, true));
@@ -639,11 +639,6 @@ pub fn withdraw_tokens(
 	accounts.push(AccountMeta::new_readonly(*mint, false));
 	accounts.push(AccountMeta::new(*recipient_token_account, false));
 	accounts.push(AccountMeta::new_readonly(spl_token_2022::id(), false));
-	accounts.push(AccountMeta::new_readonly(system_program::id(), false));
-	accounts.push(AccountMeta::new_readonly(
-		spl_associated_token_account::id(),
-		false,
-	));
 
 	Ok(Instruction::new_with_borsh(
 		crate::id(),
@@ -660,7 +655,7 @@ pub fn terminate_whitelist(
 	recipient: &Pubkey,
 	recipient_token_account: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
-	let mut accounts = Vec::with_capacity(9);
+	let mut accounts = Vec::with_capacity(8);
 
 	accounts.push(AccountMeta::new(*whitelist, false));
 	accounts.push(AccountMeta::new(*authority, true));
@@ -670,10 +665,6 @@ pub fn terminate_whitelist(
 	accounts.push(AccountMeta::new(*recipient_token_account, false));
 	accounts.push(AccountMeta::new_readonly(spl_token_2022::id(), false));
 	accounts.push(AccountMeta::new_readonly(system_program::id(), false));
-	accounts.push(AccountMeta::new_readonly(
-		spl_associated_token_account::id(),
-		false,
-	));
 
 	Ok(Instruction::new_with_borsh(
 		crate::id(),

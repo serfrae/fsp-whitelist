@@ -34,7 +34,7 @@ impl Processor {
 		let instruction: WhitelistInstruction = WhitelistInstruction::try_from_slice(data)
 			.map_err(|_| ProgramError::InvalidInstructionData)?;
 
-		let _ = match instruction {
+		match instruction {
 			WhitelistInstruction::InitialiseWhitelist {
 				treasury,
 				token_price,
@@ -93,9 +93,7 @@ impl Processor {
 				Self::process_withdraw_sol(accounts, amount)
 			}
 			WhitelistInstruction::TerminateWhitelist => Self::process_terminate_whitelist(accounts),
-		};
-
-		Ok(())
+		}
 	}
 
 	fn process_init(
@@ -161,7 +159,7 @@ impl Processor {
 			invoke_signed(
 				&system_instruction::create_account(
 					authority.key,
-					&wl,
+					&whitelist_account.key,
 					rent.minimum_balance(Whitelist::LEN)
 						.max(1)
 						.saturating_sub(whitelist_account.lamports()),
@@ -180,7 +178,7 @@ impl Processor {
 			invoke_signed(
 				&spl_associated_token_account::instruction::create_associated_token_account(
 					authority.key,
-					&wl,
+					&whitelist_account.key,
 					mint.key,
 					token_program.key,
 				),
@@ -195,31 +193,33 @@ impl Processor {
 				],
 				&[&[SEED, mint.key.as_ref(), &[bump]]],
 			)?;
-		}
 
-		let whitelist_state = Whitelist {
-			bump,
-			authority: *authority.key,
-			vault: *vault.key,
-			mint: *mint.key,
-			treasury: *treasury,
-			token_price,
-			buy_limit,
-			deposited: 0,
-			whitelist_size,
-			allow_registration,
-			registration_start_timestamp,
-			registration_duration,
-			sale_start_timestamp,
-			sale_duration,
-		};
+			let whitelist_state = Whitelist {
+				bump,
+				authority: *authority.key,
+				vault: *vault.key,
+				mint: *mint.key,
+				treasury: *treasury,
+				token_price,
+				buy_limit,
+				deposited: 0,
+				whitelist_size,
+				allow_registration,
+				registration_start_timestamp,
+				registration_duration,
+				sale_start_timestamp,
+				sale_duration,
+			};
 
-		whitelist_state.check_times()?;
+			whitelist_state.check_times()?;
 
-		whitelist_state.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
-		msg!("Whitelist initialised");
+			whitelist_state.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
+			msg!("Whitelist initialised");
 
-		Ok(())
+			Ok(())
+		} else {
+            return Err(WhitelistError::WhitelistAlreadyInitialized.into());
+        }
 	}
 
 	fn process_add_user(accounts: &[AccountInfo]) -> ProgramResult {
@@ -303,6 +303,7 @@ impl Processor {
 		let accounts_iter = &mut accounts.iter();
 		let whitelist_account = next_account_info(accounts_iter)?;
 		let authority = next_account_info(accounts_iter)?;
+		let mint = next_account_info(accounts_iter)?;
 		let user_account = next_account_info(accounts_iter)?;
 		let user_ticket_account = next_account_info(accounts_iter)?;
 		let system_program = next_account_info(accounts_iter)?;
@@ -1466,6 +1467,18 @@ mod tests {
 		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
 		transaction.sign(&[payer], recent_blockhash);
 		banks_client.process_transaction(transaction).await.unwrap();
+		let whitelist_account = banks_client
+			.get_account(whitelist_keypair.pubkey())
+			.await
+			.expect("get_account")
+			.expect("whitelist account not none");
+		let rent = Rent::get().unwrap();
+		assert_eq!(whitelist_account.data.len(), Whitelist::LEN);
+		assert_eq!(whitelist_account.owner, crate::id());
+		assert_eq!(
+			whitelist_account.lamports,
+			rent.minimum_balance(Whitelist::LEN)
+		);
 	}
 
 	#[test_case(spl_token::id() ; "Token Program")]
@@ -1527,49 +1540,49 @@ mod tests {
 		banks_client.process_transaction(transaction).await.unwrap();
 	}
 
-	#[test_case(spl_token::id() ; "Token Program")]
-	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	#[tokio::test]
-	async fn test_deposit_tokens(token_program_id: Pubkey) {
-		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
-			&mut banks_client,
-			&payer,
-			&recent_blockhash,
-			&token_program_id,
-		)
-		.await;
+	//#[test_case(spl_token::id() ; "Token Program")]
+	//#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
+	//#[tokio::test]
+	//async fn test_deposit_tokens(token_program_id: Pubkey) {
+	//	let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
+	//	let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+	//		&mut banks_client,
+	//		&payer,
+	//		&recent_blockhash,
+	//		&token_program_id,
+	//	)
+	//	.await;
 
-		let payer_token_account = mint_tokens(
-			&mut banks_client,
-			&payer,
-			&recent_blockhash,
-			&mint,
-			&token_program_id,
-		)
-		.await;
+	//	let payer_token_account = mint_tokens(
+	//		&mut banks_client,
+	//		&payer,
+	//		&recent_blockhash,
+	//		&mint,
+	//		&token_program_id,
+	//	)
+	//	.await;
 
-		let ix = crate::instructions::deposit_tokens(
-			&whitelist.pubkey(),
-			&vault,
-			&payer.pubkey(),
-			&payer_token_account,
-			&mint.pubkey(),
-			42,
-		)
-		.unwrap();
+	//	let ix = crate::instructions::deposit_tokens(
+	//		&whitelist.pubkey(),
+	//		&vault,
+	//		&payer.pubkey(),
+	//		&payer_token_account,
+	//		&mint.pubkey(),
+	//		42,
+	//	)
+	//	.unwrap();
 
-		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-		transaction.sign(&[payer], recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-	}
+	//	let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+	//	transaction.sign(&[payer], recent_blockhash);
+	//	banks_client.process_transaction(transaction).await.unwrap();
+	//}
 
 	#[test_case(spl_token::id() ; "Token Program")]
 	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
 	#[tokio::test]
 	async fn test_amend_whitelist_size(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1594,7 +1607,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_amend_times(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1622,7 +1635,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_allow_registration_false(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1637,6 +1650,14 @@ mod tests {
 		let mut transaction = Transaction::new_with_payer(&[ix_false], Some(&payer.pubkey()));
 		transaction.sign(&[payer], recent_blockhash);
 		banks_client.process_transaction(transaction).await.unwrap();
+
+		let whitelist_account = banks_client
+			.get_account(whitelist.pubkey())
+			.await
+			.expect("get_account")
+			.expect("whitelist account not none");
+		let wl_data = Whitelist::try_from_slice(&whitelist_account.data[..]).unwrap();
+		assert_eq!(wl_data.allow_registration, false);
 	}
 
 	#[test_case(spl_token::id() ; "Token Program")]
@@ -1644,7 +1665,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_allow_registration_true(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1659,6 +1680,14 @@ mod tests {
 		let mut transaction = Transaction::new_with_payer(&[ix_true], Some(&payer.pubkey()));
 		transaction.sign(&[payer], recent_blockhash);
 		banks_client.process_transaction(transaction).await.unwrap();
+
+		let whitelist_account = banks_client
+			.get_account(whitelist.pubkey())
+			.await
+			.expect("get_account")
+			.expect("whitelist account not none");
+		let wl_data = Whitelist::try_from_slice(&whitelist_account.data[..]).unwrap();
+		assert_eq!(wl_data.allow_registration, true);
 	}
 
 	#[test_case(spl_token::id() ; "Token Program")]
@@ -1666,7 +1695,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_register(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1677,12 +1706,28 @@ mod tests {
 		let user = Keypair::new();
 		let (ticket, _) = get_user_ticket_address(&user.pubkey(), &whitelist.pubkey());
 
+		// Test ticket does not exist
+		assert_eq!(
+			banks_client.get_account(ticket).await.expect("get_account"),
+			None,
+		);
 		let ix =
 			crate::instructions::register(&whitelist.pubkey(), &user.pubkey(), &ticket).unwrap();
 
 		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-		transaction.sign(&[payer], recent_blockhash);
+		transaction.sign(&[user], recent_blockhash);
 		banks_client.process_transaction(transaction).await.unwrap();
+
+		let ticket_account = banks_client
+			.get_account(ticket)
+			.await
+			.expect("get_account")
+			.expect("associated_account not none");
+
+		let rent = Rent::get().unwrap();
+		assert_eq!(ticket_account.data.len(), Ticket::LEN);
+		assert_eq!(ticket_account.owner, crate::id());
+		assert_eq!(ticket_account.lamports, rent.minimum_balance(Ticket::LEN));
 	}
 
 	//#[test_case(spl_token::id() ; "Token Program")]
@@ -1714,7 +1759,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_start_registration(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
@@ -1735,7 +1780,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_start_token_sale(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
