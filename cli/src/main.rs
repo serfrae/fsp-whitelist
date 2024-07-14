@@ -57,10 +57,10 @@ enum Commands {
 
 	/// Terminate the whitelist and send tokens to the recipient
 	Close {
-        /// Mint of the token sale
+		/// Mint of the token sale
 		mint: Pubkey,
 
-        /// Address to send tokens/SOL to, if `None` then defaults to authority wallet
+		/// Address to send tokens/SOL to, if `None` then defaults to authority wallet
 		recipient: Option<Pubkey>,
 	},
 
@@ -127,36 +127,36 @@ enum Method {
 	Single(TicketFields),
 
 	/// Withdraw from all tickets associated with the whitelist
-	Bulk { 
-        /// Mint of the token sale
-        mint: Pubkey 
-    },
+	Bulk {
+		/// Mint of the token sale
+		mint: Pubkey,
+	},
 }
 
 #[derive(Subcommand, Debug)]
 enum Detail {
-    /// Amend registration/sale times/duration
+	/// Amend registration/sale times/duration
 	Times {
 		mint: Pubkey,
-		/// Unixtimestamp when registration for the whitelist commences
+		/// When registration starts. Format: YYYY-MM-DD HH:MM:SS (UTC)
 		registration_start_time: Option<String>,
 
-		/// Duration in milliseconds when users can register for the whitelist
+		/// When registration ends. Format: YYYY-MM-DD HH:MM:SS (UTC)
 		registration_end_time: Option<String>,
 
-		/// Unixtimestamp when the token sale commences
+		/// When token sale starts. Format: YYYY-MM-DD HH:MM:SS (UTC)
 		sale_start_time: Option<String>,
 
-		/// Duration in milliseconds of the token sale
+		/// When token sale stops. Format: YYYY-MM-DD HH:MM:SS (UTC)
 		sale_end_time: Option<String>,
 	},
 
-    /// Amend whitelist size
+	/// Amend whitelist size
 	Size {
-        /// Mint of the token sale
+		/// Mint of the token sale
 		mint: Pubkey,
 
-        /// Desired whitelist size. `None` == no limit
+		/// Desired whitelist size. `None` == no limit
 		size: Option<u64>,
 	},
 }
@@ -253,19 +253,19 @@ struct Init {
 	#[clap(long)]
 	allow_registration: Option<bool>,
 
-	/// Unixtimestamp of the start of whitelist registration
+	/// When registration starts. Format: YYYY-MM-DD HH:MM:SS
 	#[clap(long)]
 	registration_start_time: Option<String>,
 
-	/// Duration in milliseconds of whitelist registration
+	/// When registration ends. Format: YYYY-MM-DD HH:MM:SS
 	#[clap(long)]
 	registration_end_time: Option<String>,
 
-	/// Unixtimestamp of the start of the token sale
+	/// When token sale starts. Format: YYYY-MM-DD HH:MM:SS
 	#[clap(long)]
 	sale_start_time: Option<String>,
 
-	/// Duration in milliseconds of the token sale
+	/// When token sale ends. Format: YYYY-MM-DD HH:MM:SS
 	#[clap(long)]
 	sale_end_time: Option<String>,
 }
@@ -295,20 +295,44 @@ fn main() -> Result<()> {
 				&whitelist,
 				&fields.mint,
 			);
+
 			let registration_start_timestamp = match fields.registration_start_time {
-				Some(time) => Some(string_to_timestamp(time)?),
+				Some(ref time) => Some(string_to_timestamp(time.to_string())?),
 				None => None,
 			};
-			let registration_end_timestamp = match fields.registration_end_time {
-				Some(time) => Some(string_to_timestamp(time)?),
+
+			let registration_duration = match fields.registration_end_time {
+				Some(ref time) => {
+					let ts = string_to_timestamp(time.to_string()).expect("error parsing time");
+
+					if registration_start_timestamp.is_some_and(|t| t < ts) {
+						Some(ts - registration_start_timestamp.unwrap())
+					} else {
+						return Err(anyhow!(
+							"Cannot compute duration, start time is after provided end time"
+						));
+					}
+				}
 				None => None,
 			};
+
 			let sale_start_timestamp = match fields.sale_start_time {
-				Some(time) => Some(string_to_timestamp(time)?),
+				Some(ref time) => Some(string_to_timestamp(time.to_string())?),
 				None => None,
 			};
-			let sale_end_timestamp = match fields.sale_end_time {
-				Some(time) => Some(string_to_timestamp(time)?),
+
+			let sale_duration = match fields.sale_end_time {
+				Some(ref time) => {
+					let ts = string_to_timestamp(time.to_string()).expect("error parsing time");
+
+					if sale_start_timestamp.is_some_and(|t| t < ts) {
+						Some(ts - sale_start_timestamp.unwrap())
+					} else {
+						return Err(anyhow!(
+							"Cannot compute duration, start time is after provided end time"
+						));
+					}
+				}
 				None => None,
 			};
 			let allow_registration = match fields.allow_registration {
@@ -330,9 +354,9 @@ fn main() -> Result<()> {
 				fields.whitelist_size,
 				allow_registration,
 				registration_start_timestamp,
-				registration_end_timestamp,
+				registration_duration,
 				sale_start_timestamp,
-				sale_end_timestamp,
+				sale_duration,
 			)
 			.map_err(|err| {
 				anyhow!(
@@ -514,50 +538,86 @@ fn main() -> Result<()> {
 				},
 			},
 		},
-		Commands::Amend(detail) => match detail {
-			Detail::Size { mint, size } => {
-				let (whitelist, _) = get_whitelist_address(&mint);
-				instructions::amend_whitelist_size(&whitelist, &wallet_pubkey, size).map_err(
-					|err| anyhow!("Unable to create `AmendWhitelistSize` instruction: {}", err),
-				)?
-			}
-			Detail::Times {
-				mint,
-				registration_start_time,
-				registration_end_time,
-				sale_start_time,
-				sale_end_time,
-			} => {
-				let (whitelist, _) = get_whitelist_address(&mint);
+		Commands::Amend(detail) => {
+			match detail {
+				Detail::Size { mint, size } => {
+					let (whitelist, _) = get_whitelist_address(&mint);
+					instructions::amend_whitelist_size(&whitelist, &wallet_pubkey, size).map_err(
+						|err| anyhow!("Unable to create `AmendWhitelistSize` instruction: {}", err),
+					)?
+				}
+				Detail::Times {
+					mint,
+					registration_start_time,
+					registration_end_time,
+					sale_start_time,
+					sale_end_time,
+				} => {
+					let (whitelist, _) = get_whitelist_address(&mint);
 
-				let registration_start_timestamp = match registration_start_time {
-					Some(time) => Some(string_to_timestamp(time)?),
-					None => None,
-				};
-				let registration_end_timestamp = match registration_end_time {
-					Some(time) => Some(string_to_timestamp(time)?),
-					None => None,
-				};
-				let sale_start_timestamp = match sale_start_time {
-					Some(time) => Some(string_to_timestamp(time)?),
-					None => None,
-				};
-				let sale_end_timestamp = match sale_end_time {
-					Some(time) => Some(string_to_timestamp(time)?),
-					None => None,
-				};
+					let whitelist_account = client.get_account_data(&whitelist)?;
+					let wl_data = stuk_wl::state::Whitelist::try_from_slice(&whitelist_account)?;
 
-				instructions::amend_times(
-					&whitelist,
-					&wallet_pubkey,
-					registration_start_timestamp,
-					registration_end_timestamp,
-					sale_start_timestamp,
-					sale_end_timestamp,
-				)
-				.map_err(|err| anyhow!("Unable to create `AmendTimes` instruction: {}", err))?
+					let registration_start_timestamp = match registration_start_time {
+						Some(time) => Some(string_to_timestamp(time)?),
+						None => None,
+					};
+
+					let registration_duration = match registration_end_time {
+						Some(time) => {
+							let ts = string_to_timestamp(time).expect("error parsing time");
+
+							if registration_start_timestamp.is_some_and(|t| t < ts) {
+								Some(ts - registration_start_timestamp.unwrap())
+							} else {
+								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
+							};
+
+							if wl_data.registration_start_timestamp.is_some_and(|t| t < ts) {
+								Some(ts - wl_data.registration_start_timestamp.unwrap())
+							} else {
+								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
+							}
+						}
+						None => None,
+					};
+
+					let sale_start_timestamp = match sale_start_time {
+						Some(time) => Some(string_to_timestamp(time)?),
+						None => None,
+					};
+
+					let sale_duration = match sale_end_time {
+						Some(time) => {
+							let ts = string_to_timestamp(time).expect("error parsing time");
+
+							if sale_start_timestamp.is_some_and(|t| t < ts) {
+								Some(ts - sale_start_timestamp.unwrap())
+							} else {
+								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
+							};
+
+							if wl_data.sale_start_timestamp.is_some_and(|t| t < ts) {
+								Some(ts - wl_data.sale_start_timestamp.unwrap())
+							} else {
+								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
+							}
+						}
+						None => None,
+					};
+
+					instructions::amend_times(
+						&whitelist,
+						&wallet_pubkey,
+						registration_start_timestamp,
+						registration_duration,
+						sale_start_timestamp,
+						sale_duration,
+					)
+					.map_err(|err| anyhow!("Unable to create `AmendTimes` instruction: {}", err))?
+				}
 			}
-		},
+		}
 		Commands::Start(start) => match start {
 			Start::Registration { mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);

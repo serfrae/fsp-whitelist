@@ -4890,9 +4890,7 @@ dependencies = [
 name = "stuk-whitelist"
 version = "0.1.0"
 dependencies = [
- "arrayref",
  "borsh 1.5.1",
- "chrono",
  "num-derive",
  "num-traits",
  "solana-program",
