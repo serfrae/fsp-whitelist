@@ -38,8 +38,10 @@ async fn main() {
 
 	let app = Router::new()
 		.route("/actions.json", get(get_request_actions_json))
-		.route("/api/actions/buy-token", get(get_request_handler))
-		.route("/api/actions/buy-token", post(post_request_handler))
+		.route("/api/actions/buy-token", get(buy_get_request_handler))
+		.route("/api/actions/buy-token", post(buy_post_request_handler))
+		.route("/api/actions/register", get(reg_get_request_handler))
+		.route("/api/actions/register", post(reg_post_request_handler))
 		.layer(cors);
 
 	let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
@@ -89,7 +91,7 @@ struct Parameter {
 	required: bool,
 }
 
-async fn get_request_handler() -> impl IntoResponse {
+async fn buy_get_request_handler() -> impl IntoResponse {
 	let base_href = "/api/actions/buy-token?";
 	let response = ActionGetResponse {
 		title: "Whitelist - Buy token".into(),
@@ -118,6 +120,23 @@ async fn get_request_handler() -> impl IntoResponse {
 	(StatusCode::OK, Json(response))
 }
 
+async fn reg_get_request_handler() -> impl IntoResponse {
+	let base_href = "/api/actions/register";
+	let response = ActionGetResponse {
+		title: "Whitelist Register".into(),
+		icon: "".into(),
+		description: "Register for token presale".into(),
+		links: Links {
+			actions: vec![ActionLink {
+				label: "Register".into(),
+				href: base_href.to_string(),
+				parameters: None,
+			}],
+		},
+	};
+	(StatusCode::OK, Json(response))
+}
+
 #[derive(Deserialize)]
 struct QueryParams {
 	amount: f64,
@@ -134,14 +153,14 @@ struct PostResponse {
 	message: String,
 }
 
-async fn post_request_handler(
+async fn buy_post_request_handler(
 	Query(params): Query<QueryParams>,
 	Json(payload): Json<PostRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
 	let account = Pubkey::from_str(&payload.account).map_err(|_| {
 		(
 			StatusCode::BAD_REQUEST,
-			Json(json!({"errpr": "Invalid 'account' provided"})),
+			Json(json!({"error": "Invalid 'account' provided"})),
 		)
 	})?;
 	let to_pubkey = Keypair::new().pubkey();
@@ -170,6 +189,60 @@ async fn post_request_handler(
 		(
 			StatusCode::INTERNAL_SERVER_ERROR,
 			Json(json!({"error": format!("Could not create `BuyToken` instruction: {}", err)})),
+		)
+	})?;
+	let mut transaction = Transaction::new_with_payer(&[instruction], Some(&account));
+	transaction.message.recent_blockhash = latest_blockhash;
+
+	let serialized_transaction = serialize(&transaction).map_err(|_| {
+		(
+			StatusCode::INTERNAL_SERVER_ERROR,
+			Json(json!({"error": "Failed to serialize transaction"})),
+		)
+	})?;
+
+	Ok(Json(PostResponse {
+		transaction: STANDARD.encode(serialized_transaction),
+		message: format!("Send {} SOL to {}", params.amount, to_pubkey),
+	}))
+}
+
+async fn reg_post_request_handler(
+	Query(params): Query<QueryParams>,
+	Json(payload): Json<PostRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+	let account = Pubkey::from_str(&payload.account).map_err(|_| {
+		(
+			StatusCode::BAD_REQUEST,
+			Json(json!({"error": "Invalid 'account' provided"})),
+		)
+	})?;
+	let to_pubkey = Keypair::new().pubkey();
+	let rpc_client = RpcClient::new_with_commitment(
+		"https://api.devnet.solana.com".to_string(),
+		CommitmentConfig::confirmed(),
+	);
+
+	let latest_blockhash = rpc_client.get_latest_blockhash().map_err(|err| {
+		(
+			StatusCode::INTERNAL_SERVER_ERROR,
+			Json(json!({"error": format!("Failed to get latest blockhash: {}", err)})),
+		)
+	})?;
+
+	let instruction = instructions::register(
+		&Pubkey::new_unique(),
+		&Pubkey::new_unique(),
+		&Pubkey::new_unique(),
+		&Pubkey::new_unique(),
+		&Pubkey::new_unique(),
+		&Pubkey::new_unique(),
+		params.amount as u64,
+	)
+	.map_err(|err| {
+		(
+			StatusCode::INTERNAL_SERVER_ERROR,
+			Json(json!({"error": format!("Could not create `Register` instruction: {}", err)})),
 		)
 	})?;
 	let mut transaction = Transaction::new_with_payer(&[instruction], Some(&account));
