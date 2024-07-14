@@ -42,12 +42,49 @@ addresses from within the CLI, although I may implement this at a later date.
 
 ## Usage - Seller
 
+```
+wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> [WHITELIST_SIZE] [ALLOW_REGISTRATION] [REGISTRATION_START_TIME] [REGISTRATION_DURATION] [SALE_START_TIME] [SALE_DURATION]
+```
+
+```
+wl-stuk user add <MINT> <USER>
+wl-stuk user remove <MINT> <USER>
+```
+
+```
+wl-stuk token deposit <MINT> <AMOUNT>
+wl-stuck token withdraw 
+```
+
+```
+wl-stuk amend times <MINT> [REGISTRATION_START_TIME] [REGISTRATION_DURATION] [SALE_START_TIME] [SALE_DURATION]
+wl-stuk amend size <MINT> [SIZE]
+```
+
+```
+wl-stuk start registration <MINT>
+wl-stuk start sale <MINT>
+```
+
+```
+wl-stuk registration <MINT> <ALLOW_REGISTRATION>
+```
+
+```
+wl-stuk close <MINT> [RECIPIENT]
+```
+
+```
+wl-stuk info whitelist <MINT>
+wl-stuk info user <MINT> <USER>
+```
+
 ## Usage - User
 There are only four (4) commands relevant to a whitelist subscriber in the CLI these being:
 ```
 1. stuk-wl register <MINT>
 2. stuk-wl unregister <MINT>
-3. stuk-wl buy <MINT> <AMOUNT>
+3. stuk-wl token buy <MINT> <AMOUNT>
 3. stukw-wl info whitelist/user <PUBKEY> <MINT>
 ```
 
