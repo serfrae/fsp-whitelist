@@ -2,6 +2,28 @@
 
 This program and it's associated client and blink permit users to register for a token presale.
 
+## Implementation
+This program allows for a whitelist-gated token sale. It supports both spl_token and spl_token_2022 accounts and is intended to
+be as feature-rich as possible while enabling a large range of customization options.
+
+The program is also optimised for parallel execution to avoid the typical bottlenecks: when registration begins and the token sale
+itself, these bottlenecks are caused by writes to the program's account state which may only occur once per slot. This program
+avoids these bottlenecks by enabling the seller to preload tokens into the ticket accounts so that when a token sale begins transfers are made 
+from the ticket account to the user's token account and SOL is transferred from the user wallet to the ticket account's wallet, thus avoiding
+writes to the same account. The program is able to recognise whether the ticket account has been pre-loaded, if ticket accounts are not pre-loaded the
+program will transfer from the token vault instead. A seller can then sweep the accounts after the token sale has completed, all SOL and rent will be 
+transferred into the designated treasury account.
+
+A seller may also define whether or not to permit users to register for the whitelist or add them manually by setting the flag `allow_registration`.
+When set to false, users will not be able to register, this may also be used to freeze registration for whatever purpose.
+
+A seller can set timestamps to automatically commence registration or token sales, or manually trigger these themselves using the `StartRegistration`
+or `StartTokenSale` instructions.
+
+It should be noted that providing a duration for each phase of the sale is optional, but is not recommended for the token sale, as a user will not be able to
+withdraw tokens/sol unless all tokens are distributed. There does however, exist a workaround, where a seller may terminate the user's ticket using the `RemoveUser`
+instruction to "burn" a ticket and transfer all tokens and sol back to themselves.
+
 ## Setup
 Deployment of this program costs approximately 2.4 SOL.
 
