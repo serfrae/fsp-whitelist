@@ -19,6 +19,8 @@ pub enum WhitelistError {
 	SignerError,
 	#[error("Account mismatch")]
 	AccountMismatch,
+    #[error("Incorrect token program")]
+    IncorrectTokenProgram,
 	#[error("Whitelist Already Initialized")]
 	WhitelistAlreadyInitialized,
 	#[error("Whitelist Not Initialized")]
