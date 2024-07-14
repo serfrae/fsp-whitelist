@@ -11,7 +11,10 @@ use {
 		signature::{read_keypair_file, Signer},
 		transaction::Transaction,
 	},
-	spl_token_2022,
+	spl_token_2022::{
+		extension::StateWithExtensions,
+		state::{Account, Mint},
+	},
 	stuk_wl::{get_user_ticket_address, get_whitelist_address, instructions},
 };
 
@@ -418,20 +421,22 @@ fn main() -> Result<()> {
 					spl_associated_token_account::get_associated_token_address_with_program_id(
 						&user_ticket,
 						&fields.mint,
-                        &token_program,
+						&token_program,
 					);
 
-				let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
-					&whitelist,
-					&fields.mint,
-                    &token_program,
-				);
+				let vault =
+					spl_associated_token_account::get_associated_token_address_with_program_id(
+						&whitelist,
+						&fields.mint,
+						&token_program,
+					);
 
-				let user_token_account = spl_associated_token_account::get_associated_token_address_with_program_id(
-					&wallet_pubkey,
-					&fields.mint,
-                    &token_program,
-				);
+				let user_token_account =
+					spl_associated_token_account::get_associated_token_address_with_program_id(
+						&wallet_pubkey,
+						&fields.mint,
+						&token_program,
+					);
 
 				instructions::buy_tokens(
 					&whitelist,
@@ -755,8 +760,21 @@ fn main() -> Result<()> {
 		Commands::Info(info) => match info {
 			Info::Whitelist { mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);
+
+				let mint_decimals = {
+					let mint_account = client.get_account_data(&mint)?;
+					let mint_data = spl_token_2022::extension::StateWithExtensions::<Mint>::unpack(
+						&mint_account,
+					)?;
+					mint_data.base.decimals
+				};
+
 				let data = client.get_account_data(&whitelist).unwrap().clone();
 				let d = stuk_wl::state::Whitelist::try_from_slice(&data)?;
+
+				let buy_limit = spl_token_2022::amount_to_ui_amount(d.buy_limit, mint_decimals);
+				let deposited = spl_token_2022::amount_to_ui_amount(d.deposited, mint_decimals);
+
 				println!("Whitelist address: {}", whitelist);
 				println!("Authority address: {}", d.authority);
 				println!("Vault address: {}", d.vault);
@@ -773,14 +791,26 @@ fn main() -> Result<()> {
 				std::process::exit(1);
 			}
 			Info::User { mint, user } => {
+				let mint_decimals = {
+					let mint_account = client.get_account_data(&mint)?;
+					let mint_data = spl_token_2022::extension::StateWithExtensions::<Mint>::unpack(
+						&mint_account,
+					)?;
+					mint_data.base.decimals
+				};
 				let (whitelist, _) = get_whitelist_address(&mint);
 				let (ticket, _) = get_user_ticket_address(&user, &whitelist);
+
 				let data = client.get_account_data(&ticket).unwrap().clone();
 				let d = stuk_wl::state::Ticket::try_from_slice(&data)?;
+
+				let allowance = spl_token_2022::amount_to_ui_amount(d.allowance, mint_decimals);
+				let amount_bought =
+					spl_token_2022::amount_to_ui_amount(d.amount_bought, mint_decimals);
 				println!("Ticket owner: {}", d.owner);
 				println!("Ticket payer: {}", d.payer);
-				println!("Ticket allowance: {}", d.allowance);
-				println!("Amount purchased: {}", d.amount_bought);
+				println!("Ticket allowance: {}", allowance);
+				println!("Amount purchased: {}", amount_bought);
 
 				std::process::exit(1);
 			}

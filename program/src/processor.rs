@@ -117,6 +117,11 @@ impl Processor {
 		let rent = Rent::get()?;
 
 		let (wl, bump) = crate::get_whitelist_address(mint.key);
+		let mint_decimals = {
+			let borrowed_mint_data = mint.data.borrow();
+			let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
+			mint_data.base.decimals
+		};
 
 		// Safety dance
 		if whitelist_account.key != &wl {
@@ -191,6 +196,8 @@ impl Processor {
 				],
 				&[&[SEED, mint.key.as_ref(), &[bump]]],
 			)?;
+
+			let buy_limit = spl_token_2022::ui_amount_to_amount(buy_limit as f64, mint_decimals);
 
 			let whitelist_state = Whitelist {
 				bump,
@@ -443,7 +450,6 @@ impl Processor {
 		let system_program = next_account_info(accounts_iter)?;
 
 		let clock = Clock::get()?;
-		msg!("HERE");
 
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let (_user_ticket, user_bump) =
@@ -463,7 +469,6 @@ impl Processor {
 
 		if user_ticket_account.owner != &crate::id() {
 			let rent = Rent::get()?;
-			msg!("HEREHREHER");
 			invoke_signed(
 				&system_instruction::create_account(
 					user_account.key,
@@ -684,7 +689,6 @@ impl Processor {
 		if !user_account.is_signer {
 			return Err(WhitelistError::SignerError.into());
 		}
-        msg!("R");
 
 		{
 			let borrowed_vault_data = vault.data.borrow();
@@ -693,41 +697,36 @@ impl Processor {
 				return Err(WhitelistError::InsufficientFunds.into());
 			}
 		}
-		msg!("R");
 
 		let sol_amount = match token_amount.checked_mul(wl_data.token_price) {
 			Some(x) => x,
 			None => return Err(WhitelistError::Overflow.into()),
 		};
-		msg!("E");
 
 		if wl_data.sale_timestamp > 0 && wl_data.sale_timestamp > clock.unix_timestamp {
 			return Err(WhitelistError::SaleNotStarted.into());
 		}
-		msg!("ERALJ");
 
 		if wl_data.sale_timestamp > 0
 			&& wl_data.sale_timestamp + wl_data.sale_duration > clock.unix_timestamp
 		{
 			return Err(WhitelistError::SaleEnded.into());
 		}
-		msg!("LOL");
 
 		if ticket_data.allowance - ticket_data.amount_bought < token_amount {
 			return Err(WhitelistError::BuyLimitExceeded.into());
 		}
 
-		msg!("HERE2");
 		// We'll check for a `user_token_account` and create one if it doesn't exist
 		if user_token_account.owner != &spl_token_2022::id()
-			|| user_token_account.owner != &spl_token::id()
+			&& user_token_account.owner != &spl_token::id()
 		{
 			invoke(
 				&spl_associated_token_account::instruction::create_associated_token_account(
 					user_account.key,
 					user_token_account.key,
 					mint.key,
-					&spl_token_2022::id(),
+					token_program.key,
 				),
 				&[
 					user_account.clone(),
@@ -740,8 +739,6 @@ impl Processor {
 				],
 			)?;
 		}
-
-		msg!("HERE3");
 		// We transfer to the Ticket PDA to allow for parallel execution this can later be
 		// retrieved by the authority
 		invoke(
@@ -752,8 +749,6 @@ impl Processor {
 		// We check to see if the tokens already exist in the ticket token account
 		// if they do we transfer from that account to the user's token account, if they don't
 		// we must transfer from the vault
-
-		msg!("HERE4");
 		if amount_bought > 0 {
 			invoke_signed(
 				&spl_token_2022::instruction::transfer_checked(
@@ -779,7 +774,6 @@ impl Processor {
 				]],
 			)?;
 		}
-		msg!("HERE5");
 		invoke_signed(
 			&spl_token_2022::instruction::transfer_checked(
 				token_program.key,
@@ -797,14 +791,14 @@ impl Processor {
 				user_token_account.clone(),
 				whitelist_account.clone(),
 			],
-			&[&[SEED, mint.key.as_ref()]],
+			&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 		)?;
 
 		ticket_data.amount_bought = match ticket_data.amount_bought.checked_add(token_amount) {
 			Some(x) => x,
 			None => return Err(WhitelistError::Overflow.into()),
 		};
-		ticket_data.serialize(&mut &mut user_account.data.borrow_mut()[..])?;
+		ticket_data.serialize(&mut &mut user_ticket_account.data.borrow_mut()[..])?;
 		msg!("Bought: {}", amount);
 		Ok(())
 	}
