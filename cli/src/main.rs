@@ -780,8 +780,8 @@ fn main() -> Result<()> {
 				println!("Vault address: {}", d.vault);
 				println!("Mint address: {}", d.mint);
 				println!("Price per token: {}", d.token_price);
-				println!("Limit per ticket: {}", d.buy_limit);
-				println!("Deposited amount: {}", d.deposited);
+				println!("Limit per ticket: {}", buy_limit);
+				println!("Deposited amount: {}", deposited);
 				println!("Registration?: {}", d.allow_registration);
 				println!("Registration start time: {:?}", d.registration_timestamp);
 				println!("Registration duration: {:?}", d.registration_duration);
