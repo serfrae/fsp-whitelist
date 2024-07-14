@@ -658,44 +658,66 @@ impl Processor {
 
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let mut ticket_data = Ticket::try_from_slice(&user_ticket_account.data.borrow()[..])?;
-		let borrowed_mint_data = mint.data.borrow();
-		let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
-		let borrowed_vault_data = vault.data.borrow();
-		let vault_data = StateWithExtensions::<Account>::unpack(&borrowed_vault_data)?;
-		let borrowed_ticket_token_account_data = ticket_token_account.data.borrow();
-		let ticket_token_account_data =
-			StateWithExtensions::<Account>::unpack(&borrowed_ticket_token_account_data)?;
 
-		let token_amount =
-			spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals);
+		let amount_bought = {
+			if ticket_token_account.owner == &spl_token_2022::id()
+				|| ticket_token_account.owner == &spl_token::id()
+			{
+				let borrowed_ticket_token_account_data = ticket_token_account.data.borrow();
+				let ticket_token_account_data =
+					StateWithExtensions::<Account>::unpack(&borrowed_ticket_token_account_data)?;
+				ticket_token_account_data.base.amount
+			} else {
+				0
+			}
+		};
+
+		let (mint_decimals, token_amount) = {
+			let borrowed_mint_data = mint.data.borrow();
+			let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
+			(
+				mint_data.base.decimals,
+				spl_token_2022::ui_amount_to_amount(amount as f64, mint_data.base.decimals),
+			)
+		};
 
 		if !user_account.is_signer {
 			return Err(WhitelistError::SignerError.into());
 		}
+        msg!("R");
 
-		if vault_data.base.amount < token_amount {
-			return Err(WhitelistError::InsufficientFunds.into());
+		{
+			let borrowed_vault_data = vault.data.borrow();
+			let vault_data = StateWithExtensions::<Account>::unpack(&borrowed_vault_data)?;
+			if vault_data.base.amount < token_amount {
+				return Err(WhitelistError::InsufficientFunds.into());
+			}
 		}
+		msg!("R");
 
 		let sol_amount = match token_amount.checked_mul(wl_data.token_price) {
 			Some(x) => x,
 			None => return Err(WhitelistError::Overflow.into()),
 		};
+		msg!("E");
 
 		if wl_data.sale_timestamp > 0 && wl_data.sale_timestamp > clock.unix_timestamp {
 			return Err(WhitelistError::SaleNotStarted.into());
 		}
+		msg!("ERALJ");
 
 		if wl_data.sale_timestamp > 0
 			&& wl_data.sale_timestamp + wl_data.sale_duration > clock.unix_timestamp
 		{
 			return Err(WhitelistError::SaleEnded.into());
 		}
+		msg!("LOL");
 
 		if ticket_data.allowance - ticket_data.amount_bought < token_amount {
 			return Err(WhitelistError::BuyLimitExceeded.into());
 		}
 
+		msg!("HERE2");
 		// We'll check for a `user_token_account` and create one if it doesn't exist
 		if user_token_account.owner != &spl_token_2022::id()
 			|| user_token_account.owner != &spl_token::id()
@@ -719,6 +741,7 @@ impl Processor {
 			)?;
 		}
 
+		msg!("HERE3");
 		// We transfer to the Ticket PDA to allow for parallel execution this can later be
 		// retrieved by the authority
 		invoke(
@@ -730,7 +753,8 @@ impl Processor {
 		// if they do we transfer from that account to the user's token account, if they don't
 		// we must transfer from the vault
 
-		if ticket_token_account_data.base.amount > 0 {
+		msg!("HERE4");
+		if amount_bought > 0 {
 			invoke_signed(
 				&spl_token_2022::instruction::transfer_checked(
 					token_program.key,
@@ -740,7 +764,7 @@ impl Processor {
 					whitelist_account.key,
 					&[],
 					token_amount,
-					mint_data.base.decimals,
+					mint_decimals,
 				)?,
 				&[
 					ticket_token_account.clone(),
@@ -755,6 +779,7 @@ impl Processor {
 				]],
 			)?;
 		}
+		msg!("HERE5");
 		invoke_signed(
 			&spl_token_2022::instruction::transfer_checked(
 				token_program.key,
@@ -764,7 +789,7 @@ impl Processor {
 				whitelist_account.key,
 				&[],
 				token_amount,
-				mint_data.base.decimals,
+				mint_decimals,
 			)?,
 			&[
 				vault.clone(),
@@ -874,7 +899,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 				depositor_account.key,
 				&[],
 				token_amount,
-                mint_decimals,
+				mint_decimals,
 			)?,
 			&[
 				depositor_token_account.clone(),

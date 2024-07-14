@@ -17,7 +17,13 @@ spl-associated-token-account = "4.0.0"
 spl-token = "6.0.0"
 chrono = "0.4.38"
 solana-client = "2.0.2"
+spl-token-2022 = "4.0.0"
 
 [[bin]]
 name = "stuk-wl"
 path = "src/main.rs"
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+predicates = "3.1.0"
+tokio = {version = "1.38.0", features = ["full", "test-util"] }

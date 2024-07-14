@@ -1,13 +1,13 @@
 #!/bin/sh
 
-PROGRAM_SIZE=$(ls -l $HOME/projects/solana/scalar/tokenizer/target/deploy/sclr_token.so | awk '{print int($5 * 1.1)}')
-PROGRAM_ID="path/to/desired/program/id/keypair"
+PROGRAM_SIZE=$(ls -l $HOME/projects/superteam/stuk-whitelist/program/target/deploy/stuk_wl.so | awk '{print int($5 * 1.1)}')
+PROGRAM_ID=$HOME/projects/superteam/stuk-whitelist/test-pid.json
 
 echo "Compiling whitelist program..."
 cd ./program
 cargo build-bpf
 
-echo "Deploying tokenizer..."
+echo "Deploying whitelist program..."
 solana program deploy ./target/deploy/stuk_wl.so --program-id $PROGRAM_ID --max-len $PROGRAM_SIZE
 
 echo "Compiling cli..."

@@ -40,6 +40,8 @@ The CLI will automatically utilise this same address when being invoked. As the 
 and this was developed in two (2) days I have not had time to enable reading from configs or pointing to custom wallet
 addresses from within the CLI, although I may implement this at a later date.
 
+Because of some trauma I got from trying to implement support for both versions of the token program, both the CLI and the program will check the mint for the owner and use that to pass the correct token program.
+
 ## Usage - Seller
 
 ```

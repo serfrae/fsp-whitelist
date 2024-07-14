@@ -11,6 +11,7 @@ use {
 		signature::{read_keypair_file, Signer},
 		transaction::Transaction,
 	},
+	spl_token_2022,
 	stuk_wl::{get_user_ticket_address, get_whitelist_address, instructions},
 };
 
@@ -137,7 +138,9 @@ enum Method {
 enum Detail {
 	/// Amend registration/sale times/duration
 	Times {
+		// Mint of the token sale
 		mint: Pubkey,
+
 		/// When registration starts. Format: YYYY-MM-DD HH:MM:SS (UTC)
 		registration_start_time: Option<String>,
 
@@ -156,8 +159,8 @@ enum Detail {
 		/// Mint of the token sale
 		mint: Pubkey,
 
-		/// Desired whitelist size. `None` == no limit
-		size: Option<u64>,
+		/// Desired whitelist size. `0` == no limit
+		size: u64,
 	},
 }
 
@@ -178,7 +181,7 @@ enum Registration {
 		mint: Pubkey,
 
 		/// true: allow registration. false: freeze/deny registration
-		allow: bool,
+		allow: String,
 	},
 
 	/// Register to the whitelist
@@ -213,11 +216,12 @@ struct TokenFields {
 	/// Mint of the token associated with the whitelist
 	mint: Pubkey,
 
-	/// The wallet address that will receive the tokens
-	recipient: Option<Pubkey>,
-
 	/// Amount of tokens you wish to transfer
 	amount: u64,
+
+	/// The wallet address that will receive the tokens
+	#[clap(long)]
+	recipient: Option<Pubkey>,
 }
 #[derive(Args, Clone, Debug)]
 struct TicketFields {
@@ -243,15 +247,14 @@ struct Init {
 	buy_limit: u64,
 
 	/// The number of subscribers allowed in the whitelist
-	#[clap(long)]
-	whitelist_size: Option<u64>,
+	whitelist_size: u64,
 
 	/// Allow users to register
 	///
 	/// This flag has two purposes, it can freeze an ongoing registration, or permit
 	/// only the authority to add members to the whitelist
 	#[clap(long)]
-	allow_registration: Option<bool>,
+	allow_registration: bool,
 
 	/// When registration starts. Format: YYYY-MM-DD HH:MM:SS
 	#[clap(long)]
@@ -291,57 +294,61 @@ fn main() -> Result<()> {
 	let instruction: Instruction = match args.cmd {
 		Commands::Init(fields) => {
 			let (whitelist, _) = get_whitelist_address(&fields.mint);
-			let vault = spl_associated_token_account::get_associated_token_address(
+
+			// Retrieve the correct token program from the mint's owner
+			let mint_account = client.get_account(&fields.mint)?;
+			let token_program = mint_account.owner;
+
+			let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
 				&whitelist,
 				&fields.mint,
+				&token_program,
 			);
 
 			let registration_start_timestamp = match fields.registration_start_time {
-				Some(ref time) => Some(string_to_timestamp(time.to_string())?),
-				None => None,
+				Some(ref time) => string_to_timestamp(time.to_string())?,
+				None => 0,
 			};
 
 			let registration_duration = match fields.registration_end_time {
 				Some(ref time) => {
 					let ts = string_to_timestamp(time.to_string()).expect("error parsing time");
 
-					if registration_start_timestamp.is_some_and(|t| t < ts) {
-						Some(ts - registration_start_timestamp.unwrap())
+					if registration_start_timestamp > 0 && registration_start_timestamp < ts {
+						ts - registration_start_timestamp
 					} else {
 						return Err(anyhow!(
 							"Cannot compute duration, start time is after provided end time"
 						));
 					}
 				}
-				None => None,
+				None => 0,
 			};
 
 			let sale_start_timestamp = match fields.sale_start_time {
-				Some(ref time) => Some(string_to_timestamp(time.to_string())?),
-				None => None,
+				Some(ref time) => string_to_timestamp(time.to_string())?,
+				None => 0,
 			};
 
 			let sale_duration = match fields.sale_end_time {
 				Some(ref time) => {
 					let ts = string_to_timestamp(time.to_string()).expect("error parsing time");
 
-					if sale_start_timestamp.is_some_and(|t| t < ts) {
-						Some(ts - sale_start_timestamp.unwrap())
+					if sale_start_timestamp > 0 && sale_start_timestamp < ts {
+						ts - sale_start_timestamp
 					} else {
 						return Err(anyhow!(
 							"Cannot compute duration, start time is after provided end time"
 						));
 					}
 				}
-				None => None,
-			};
-			let allow_registration = match fields.allow_registration {
-				Some(v) => v,
-				None => true,
+				None => 0,
 			};
 
 			println!("Whitelist Account: {}", whitelist);
 			println!("Vault Account: {}", vault);
+			println!("Treasury: {}", wallet_pubkey);
+			println!("Mint: {}", fields.mint);
 
 			instructions::init_whitelist(
 				&whitelist,
@@ -352,11 +359,12 @@ fn main() -> Result<()> {
 				fields.price,
 				fields.buy_limit,
 				fields.whitelist_size,
-				allow_registration,
+				fields.allow_registration,
 				registration_start_timestamp,
 				registration_duration,
 				sale_start_timestamp,
 				sale_duration,
+				&token_program,
 			)
 			.map_err(|err| {
 				anyhow!(
@@ -403,20 +411,26 @@ fn main() -> Result<()> {
 				let (whitelist, _) = get_whitelist_address(&fields.mint);
 				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
 
+				let mint_account = client.get_account(&fields.mint)?;
+				let token_program = mint_account.owner;
+
 				let ticket_token_account =
-					spl_associated_token_account::get_associated_token_address(
+					spl_associated_token_account::get_associated_token_address_with_program_id(
 						&user_ticket,
 						&fields.mint,
+                        &token_program,
 					);
 
-				let vault = spl_associated_token_account::get_associated_token_address(
+				let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
 					&whitelist,
 					&fields.mint,
+                    &token_program,
 				);
 
-				let user_token_account = spl_associated_token_account::get_associated_token_address(
+				let user_token_account = spl_associated_token_account::get_associated_token_address_with_program_id(
 					&wallet_pubkey,
 					&fields.mint,
+                    &token_program,
 				);
 
 				instructions::buy_tokens(
@@ -428,19 +442,27 @@ fn main() -> Result<()> {
 					&ticket_token_account,
 					&user_token_account,
 					fields.amount,
+					&token_program,
 				)
 				.map_err(|err| anyhow!("Unable to create `BuyTokens` instruction: {}", err))?
 			}
 			Token::Deposit(fields) => {
 				let (whitelist, _) = get_whitelist_address(&fields.mint);
-				let vault = spl_associated_token_account::get_associated_token_address(
-					&whitelist,
-					&fields.mint,
-				);
-				let user_token_account = spl_associated_token_account::get_associated_token_address(
-					&wallet_pubkey,
-					&fields.mint,
-				);
+				let mint_account = client.get_account(&fields.mint)?;
+				let token_program = mint_account.owner;
+
+				let vault =
+					spl_associated_token_account::get_associated_token_address_with_program_id(
+						&whitelist,
+						&fields.mint,
+						&token_program,
+					);
+				let user_token_account =
+					spl_associated_token_account::get_associated_token_address_with_program_id(
+						&wallet_pubkey,
+						&fields.mint,
+						&token_program,
+					);
 				instructions::deposit_tokens(
 					&whitelist,
 					&vault,
@@ -448,6 +470,7 @@ fn main() -> Result<()> {
 					&user_token_account,
 					&fields.mint,
 					fields.amount,
+					&token_program,
 				)
 				.map_err(|err| anyhow!("Unable to create `DepositTokens` instruction: {}", err))?
 			}
@@ -455,19 +478,23 @@ fn main() -> Result<()> {
 				TokenType::Token(source) => match source {
 					Source::Vault(fields) => {
 						let (whitelist, _) = get_whitelist_address(&fields.mint);
+						let mint_account = client.get_account(&fields.mint)?;
+						let token_program = mint_account.owner;
 
-						let vault = spl_associated_token_account::get_associated_token_address(
+						let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
 							&whitelist,
 							&fields.mint,
+                            &token_program,
 						);
 						let recipient = match fields.recipient {
 							Some(r) => r,
 							None => wallet_pubkey,
 						};
 						let token_account =
-							spl_associated_token_account::get_associated_token_address(
+							spl_associated_token_account::get_associated_token_address_with_program_id(
 								&recipient,
 								&fields.mint,
+                                &token_program,
 							);
 						instructions::withdraw_tokens(
 							&whitelist,
@@ -476,6 +503,7 @@ fn main() -> Result<()> {
 							&fields.mint,
 							&token_account,
 							fields.amount,
+							&token_program,
 						)
 						.map_err(|err| {
 							anyhow!("Unable to create `WithdrawTokens` instruction: {}", err)
@@ -491,22 +519,7 @@ fn main() -> Result<()> {
 					},
 				},
 				TokenType::Sol(source) => match source {
-					Source::Vault(fields) => {
-						let (whitelist, _) = get_whitelist_address(&fields.mint);
-						let recipient = match fields.recipient {
-							Some(r) => r,
-							None => wallet_pubkey,
-						};
-						instructions::withdraw_sol(
-							&whitelist,
-							&wallet_pubkey,
-							&recipient,
-							fields.amount,
-						)
-						.map_err(|err| {
-							anyhow!("Unable to create `WithdrawSol` instruction: {}", err)
-						})?
-					}
+					Source::Vault(fields) => unimplemented!(),
 					Source::Ticket(method) => match method {
 						Method::Single(fields) => unimplemented!(),
 						Method::Bulk { mint } => {
@@ -573,8 +586,10 @@ fn main() -> Result<()> {
 								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
 							};
 
-							if wl_data.registration_start_timestamp.is_some_and(|t| t < ts) {
-								Some(ts - wl_data.registration_start_timestamp.unwrap())
+							if wl_data.registration_timestamp > 0
+								&& wl_data.registration_timestamp < ts
+							{
+								Some(ts - wl_data.registration_timestamp)
 							} else {
 								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
 							}
@@ -597,8 +612,8 @@ fn main() -> Result<()> {
 								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
 							};
 
-							if wl_data.sale_start_timestamp.is_some_and(|t| t < ts) {
-								Some(ts - wl_data.sale_start_timestamp.unwrap())
+							if wl_data.sale_timestamp > 0 && wl_data.sale_timestamp < ts {
+								Some(ts - wl_data.sale_timestamp)
 							} else {
 								return Err(anyhow!("Cannot compute duration, start time is after provided end time"));
 							}
@@ -635,17 +650,24 @@ fn main() -> Result<()> {
 		Commands::Register(reg) => match reg {
 			Registration::Allow { allow, mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);
-				instructions::allow_registration(&whitelist, &wallet_pubkey, allow).map_err(
+				let allow_bool = match allow.as_str() {
+					"true" | "yes" | "y" => true,
+					"false" | "no" | "n" => false,
+					_ => return Err(anyhow!("Incorrect value provided")),
+				};
+				instructions::allow_registration(&whitelist, &wallet_pubkey, allow_bool).map_err(
 					|err| anyhow!("Unable to create `AllowRegistration` instruction: {}", err),
 				)?
 			}
 			Registration::Register { mint } => {
 				let (whitelist, _) = get_whitelist_address(&mint);
 				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
+				println!("Getting data");
 				let whitelist_data = client.get_account_data(&whitelist)?;
 				let wl_data = stuk_wl::state::Whitelist::try_from_slice(&whitelist_data)?;
 
-				if wl_data.whitelist_size.is_some_and(|n| {
+				if wl_data.whitelist_size > 0 && {
+					println!("Getting accounts");
 					let whitelist_accounts = client.get_program_accounts(&whitelist).unwrap();
 					let mut accounts = Vec::new();
 					for (pubkey, account) in whitelist_accounts {
@@ -653,8 +675,8 @@ fn main() -> Result<()> {
 							accounts.push(pubkey);
 						}
 					}
-					(n as usize) < accounts.len()
-				}) {
+					(wl_data.whitelist_size as usize) < accounts.len()
+				} {
 					println!("Whitelist full");
 					std::process::exit(2);
 				}
@@ -666,10 +688,21 @@ fn main() -> Result<()> {
 				let (whitelist, _) = get_whitelist_address(&mint);
 				let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
 
+				let mint_account = client.get_account(&mint)?;
+				let token_program = mint_account.owner;
+
 				let vault =
-					spl_associated_token_account::get_associated_token_address(&whitelist, &mint);
+					spl_associated_token_account::get_associated_token_address_with_program_id(
+						&whitelist,
+						&mint,
+						&token_program,
+					);
 				let ticket_token_account =
-					spl_associated_token_account::get_associated_token_address(&user_ticket, &mint);
+					spl_associated_token_account::get_associated_token_address_with_program_id(
+						&user_ticket,
+						&mint,
+						&token_program,
+					);
 
 				let data = client.get_account_data(&whitelist).unwrap().clone();
 				let unpacked_data = stuk_wl::state::Whitelist::try_from_slice(&data[..])?;
@@ -683,20 +716,30 @@ fn main() -> Result<()> {
 					&wallet_pubkey,
 					&user_ticket,
 					&ticket_token_account,
+					&token_program,
 				)
 				.map_err(|err| anyhow!("Unable to create `Unregister` instruction: {}", err))?
 			}
 		},
 		Commands::Close { mint, recipient } => {
 			let (whitelist, _) = get_whitelist_address(&mint);
-			let vault =
-				spl_associated_token_account::get_associated_token_address(&mint, &whitelist);
+			let mint_account = client.get_account(&mint)?;
+			let token_program = mint_account.owner;
+			let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
+				&mint,
+				&whitelist,
+				&token_program,
+			);
 			let recipient = match recipient {
 				Some(r) => r,
 				None => wallet_pubkey,
 			};
 			let token_account =
-				spl_associated_token_account::get_associated_token_address(&mint, &recipient);
+				spl_associated_token_account::get_associated_token_address_with_program_id(
+					&mint,
+					&recipient,
+					&token_program,
+				);
 
 			instructions::terminate_whitelist(
 				&whitelist,
@@ -705,6 +748,7 @@ fn main() -> Result<()> {
 				&mint,
 				&recipient,
 				&token_account,
+				&token_program,
 			)
 			.map_err(|err| anyhow!("Unable to create `TerminateWhitelist` instruction: {}", err))?
 		}
@@ -721,12 +765,9 @@ fn main() -> Result<()> {
 				println!("Limit per ticket: {}", d.buy_limit);
 				println!("Deposited amount: {}", d.deposited);
 				println!("Registration?: {}", d.allow_registration);
-				println!(
-					"Registration start time: {:?}",
-					d.registration_start_timestamp
-				);
+				println!("Registration start time: {:?}", d.registration_timestamp);
 				println!("Registration duration: {:?}", d.registration_duration);
-				println!("Sale start time: {:?}", d.sale_start_timestamp);
+				println!("Sale start time: {:?}", d.sale_timestamp);
 				println!("Sale duration: {:?}", d.sale_duration);
 
 				std::process::exit(1);
