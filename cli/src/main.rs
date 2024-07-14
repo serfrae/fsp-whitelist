@@ -5,9 +5,8 @@ use {
 	clap::{command, Args, Parser, Subcommand},
 	solana_cli_config,
 	solana_client::rpc_client::RpcClient,
-	solana_program::{instruction::Instruction, pubkey::Pubkey, system_instruction},
+	solana_program::{instruction::Instruction, pubkey::Pubkey},
 	solana_sdk::{
-		account::Account,
 		commitment_config::CommitmentConfig,
 		signature::{read_keypair_file, Signer},
 		transaction::Transaction,
@@ -112,7 +111,7 @@ enum Start {
 
 #[derive(Subcommand, Debug)]
 enum Registration {
-	Allow { allow: bool, mint: Pubkey },
+	Allow { mint: Pubkey, allow: bool },
 	Register { mint: Pubkey },
 	Unregister { mint: Pubkey },
 }

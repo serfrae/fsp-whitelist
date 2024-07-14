@@ -67,7 +67,7 @@ wl-stuk start sale <MINT>
 ```
 
 ```
-wl-stuk registration <MINT> <ALLOW_REGISTRATION>
+wl-stuk registration <MINT> <ALLOW>
 ```
 
 ```
