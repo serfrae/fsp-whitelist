@@ -24,10 +24,15 @@ It should be noted that providing a duration for each phase of the sale is optio
 withdraw tokens/sol unless all tokens are distributed. There does however, exist a workaround, where a seller may terminate the user's ticket using the `RemoveUser`
 instruction to "burn" a ticket and transfer all tokens and sol back to themselves.
 
-## Setup
-Deployment of this program costs approximately 2.4 SOL.
+A seller may also amend the times and durations, however attempting to amend a time after it's original value has elapsed will throw an error.
+A seller may set a whitelist size and the client will check for the number of registered users via a call to the rpc method `get_program_account`, the client will
+search for accounts associated with the whitelist. I may implement this search to be multi-threaded in a future release and improve the array traversal, but for
+the purpose of this SOW this should be suitable.
 
-Initialisation of a whitelist costs: SOL.
+## Setup
+Deployment of this program costs approximately 2.61 SOL.
+
+Initialisation of a whitelist has a negligible costs.
 
 Please ensure you have enough SOL in your wallet on the respective network (testnet/devnet/mainnet-beta).
 
@@ -65,6 +70,7 @@ addresses from within the CLI, although I may implement this at a later date.
 Because of some trauma I got from trying to implement support for both versions of the token program, both the CLI and the program will check the mint for the owner and use that to pass the correct token program.
 
 ## Usage - Seller
+`wl-stuk --help` will provide information on each command and subcommand
 
 ```
 wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> [WHITELIST_SIZE] [ALLOW_REGISTRATION] [REGISTRATION_START_TIME] [REGISTRATION_DURATION] [SALE_START_TIME] [SALE_DURATION]
