@@ -31,10 +31,12 @@ pub enum WhitelistError {
 	IncorrectWhitelistAddress,
 	#[error("Incorrect Vault Address")]
 	IncorrectVaultAddress,
-	#[error("Incorrect Underlying Mint Address")]
+	#[error("Incorrect Mint Address")]
 	IncorrectMintAddress,
 	#[error("Incorrect payer")]
 	IncorrectPayer,
+    #[error("Incorrect treasury address")]
+    IncorrectTreasuryAddress,
 	#[error("Sale Has Not Started")]
 	SaleNotStarted,
 	#[error("Sale has ended")]

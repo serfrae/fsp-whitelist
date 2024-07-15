@@ -51,7 +51,7 @@ pub enum WhitelistInstruction {
 	/// 3. `[]` Token mint
 	/// 4. `[]` Token program
 	/// 5. `[]` System program
-    /// 6. `[]` Assoc token program
+	/// 6. `[]` Assoc token program
 	InitialiseWhitelist {
 		treasury: Pubkey,
 		token_price: u64,
@@ -246,6 +246,22 @@ pub enum WhitelistInstruction {
 	/// 7. `[]` Associated token account program
 	WithdrawTokens { amount: u64 },
 
+	/// Burns ticket and transfers tokens and lamports into the treasury
+	///
+	/// Accounts expected:
+	///
+	/// 0. `[]` Whitelist account
+	/// 1. `[writable, signer]` Authority
+	/// 2. `[]` Mint
+	/// 3. `[writable]` Treasury
+	/// 4. `[writable]` Treasury token account
+	/// 5. `[writable]` Ticket
+	/// 6. `[writable]` Ticket token account
+	/// 7. `[]` Token program
+	/// 8. `[]` System program
+	/// 9. `[]` Associated token account program
+	BurnTicket,
+
 	/// Close the whitelist account
 	/// This instruction zeroes the whitelist account and returns
 	/// rent back to the Authority.
@@ -284,7 +300,7 @@ pub fn init_whitelist(
 	registration_duration: i64,
 	sale_start_timestamp: i64,
 	sale_duration: i64,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(7);
 
@@ -371,7 +387,7 @@ pub fn buy_tokens(
 	ticket_token_account: &Pubkey,
 	user_token_account: &Pubkey,
 	amount: u64,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(10);
 
@@ -482,7 +498,7 @@ pub fn unregister(
 	user: &Pubkey,
 	user_ticket: &Pubkey,
 	ticket_token_account: &Pubkey,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(9);
 
@@ -510,7 +526,7 @@ pub fn deposit_tokens(
 	depositor_token_account_key: &Pubkey,
 	mint: &Pubkey,
 	amount: u64,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(6);
 
@@ -568,7 +584,7 @@ pub fn transfer_tokens(
 	user_account: &Pubkey,
 	ticket_account: &Pubkey,
 	ticket_token_account: &Pubkey,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(10);
 
@@ -600,7 +616,7 @@ pub fn withdraw_tokens(
 	mint: &Pubkey,
 	recipient_token_account: &Pubkey,
 	amount: u64,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(6);
 
@@ -618,6 +634,38 @@ pub fn withdraw_tokens(
 	))
 }
 
+pub fn burn_ticket(
+	whitelist: &Pubkey,
+	authority: &Pubkey,
+	mint: &Pubkey,
+	treasury: &Pubkey,
+	treasury_token_account: &Pubkey,
+	ticket: &Pubkey,
+	ticket_token_account: &Pubkey,
+	token_program: &Pubkey,
+) -> Result<Instruction, ProgramError> {
+	let mut accounts = Vec::with_capacity(10);
+
+	accounts.push(AccountMeta::new_readonly(*whitelist, false));
+	accounts.push(AccountMeta::new(*authority, true));
+	accounts.push(AccountMeta::new_readonly(*mint, false));
+	accounts.push(AccountMeta::new(*treasury, false));
+	accounts.push(AccountMeta::new(*treasury_token_account, false));
+	accounts.push(AccountMeta::new(*ticket, false));
+	accounts.push(AccountMeta::new(*ticket_token_account, false));
+	accounts.push(AccountMeta::new_readonly(*token_program, false));
+	accounts.push(AccountMeta::new_readonly(system_program::id(), false));
+	accounts.push(AccountMeta::new_readonly(
+		spl_associated_token_account::id(),
+		false,
+	));
+	Ok(Instruction::new_with_borsh(
+		crate::id(),
+		&WhitelistInstruction::BurnTicket,
+		accounts,
+	))
+}
+
 pub fn terminate_whitelist(
 	whitelist: &Pubkey,
 	authority: &Pubkey,
@@ -625,7 +673,7 @@ pub fn terminate_whitelist(
 	mint: &Pubkey,
 	recipient: &Pubkey,
 	recipient_token_account: &Pubkey,
-    token_program: &Pubkey,
+	token_program: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(8);
 

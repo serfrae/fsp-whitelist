@@ -435,7 +435,7 @@ fn main() -> Result<()> {
 			)
 			.map_err(|err| anyhow!("Unable to create `BuyTokens` instruction: {}", err))?
 		}
-		Cammands::Deposit(fields) => {
+		Commands::Deposit(fields) => {
 			let (whitelist, _) = get_whitelist_address(&fields.mint);
 			let mint_account = client.get_account(&fields.mint)?;
 			let token_program = mint_account.owner;
@@ -507,7 +507,7 @@ fn main() -> Result<()> {
 					Method::Bulk { mint } => unimplemented!(),
 				},
 			},
-			TokenType::Sol(method) => match source {
+			TokenType::Sol(method) => match method {
 				Method::Single(fields) => {
 					let (whitelist, _) = get_whitelist_address(&fields.mint);
 					let (user_ticket, _) = get_user_ticket_address(&fields.user, &whitelist);
@@ -548,9 +548,9 @@ fn main() -> Result<()> {
 						let instruction = instructions::remove_user(
 							&whitelist,
 							&wallet_pubkey,
-							&fields.mint,
-							&fields.user,
-							&user_ticket,
+							&mint,
+							&pubkey,
+							&pubkey,
 						)
 						.map_err(|err| {
 							anyhow!("Unable to create `RemoveUser` instruction: {}", err)
@@ -702,7 +702,7 @@ fn main() -> Result<()> {
 			instructions::register(&whitelist, &wallet_pubkey, &user_ticket)
 				.map_err(|err| anyhow!("Unable to create `Register` instruction: {}", err))?
 		}
-		Registration::Unregister { mint } => {
+		Commands::Unregister { mint } => {
 			let (whitelist, _) = get_whitelist_address(&mint);
 			let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
 

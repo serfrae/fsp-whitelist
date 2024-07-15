@@ -89,6 +89,7 @@ impl Processor {
 			WhitelistInstruction::WithdrawTokens { amount } => {
 				Self::process_withdraw_tokens(accounts, amount)
 			}
+            WhitelistInstruction::BurnTicket => Self::process_burn_ticket(accounts),
 			WhitelistInstruction::TerminateWhitelist => Self::process_terminate_whitelist(accounts),
 		}
 	}
@@ -636,7 +637,7 @@ impl Processor {
 				SEED,
 				user_account.key.as_ref(),
 				whitelist_account.key.as_ref(),
-                &[user_bump],
+				&[user_bump],
 			]],
 		)?;
 
@@ -1126,6 +1127,161 @@ automatically setting the deposited token amount to fulfill the maximum required
 		)?;
 
 		msg!("Withdrawn: {}", token_amount);
+		Ok(())
+	}
+
+	fn process_burn_ticket(accounts: &[AccountInfo]) -> ProgramResult {
+		let accounts_iter = &mut accounts.iter();
+		let whitelist_account = next_account_info(accounts_iter)?;
+		let authority = next_account_info(accounts_iter)?;
+		let mint = next_account_info(accounts_iter)?;
+		let treasury = next_account_info(accounts_iter)?;
+		let treasury_token_account = next_account_info(accounts_iter)?;
+		let ticket_account = next_account_info(accounts_iter)?;
+		let ticket_token_account = next_account_info(accounts_iter)?;
+		let token_program = next_account_info(accounts_iter)?;
+		let system_program = next_account_info(accounts_iter)?;
+		let assc_token_program = next_account_info(accounts_iter)?;
+
+		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
+		let ticket_data = Ticket::try_from_slice(&ticket_account.data.borrow()[..])?;
+		let token_amount = {
+			let borrowed_ticket_token_data = ticket_token_account.data.borrow();
+			let ticket_data = StateWithExtensions::<Account>::unpack(&borrowed_ticket_token_data)?;
+			ticket_data.base.amount
+		};
+		let mint_decimals = {
+			let borrowed_mint_data = mint.data.borrow();
+			let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
+			mint_data.base.decimals
+		};
+
+		// Safety dance
+		if !authority.is_signer || authority.key != &wl_data.authority {
+			return Err(WhitelistError::Unauthorised.into());
+		}
+
+		if mint.key != &wl_data.mint {
+			return Err(WhitelistError::IncorrectMintAddress.into());
+		}
+
+		if treasury.key != &wl_data.treasury {
+			return Err(WhitelistError::IncorrectTreasuryAddress.into());
+		}
+
+		if token_program.key != &spl_token_2022::id() && token_program.key != &spl_token::id() {
+			return Err(ProgramError::IncorrectProgramId);
+		}
+
+		if system_program.key != &system_program::id() {
+			return Err(ProgramError::IncorrectProgramId);
+		}
+
+		if assc_token_program.key != &spl_associated_token_account::id() {
+			return Err(ProgramError::IncorrectProgramId);
+		}
+		let ticket_token_lamports = ticket_token_account.lamports();
+		let ticket_lamports = ticket_account.lamports();
+
+		if token_amount > 0 {
+			// Create the treasury token account if it doesn't exist
+			if treasury_token_account.owner != &spl_token_2022::id()
+				&& treasury_token_account.owner != &spl_token::id()
+			{
+				invoke_signed(
+					&spl_associated_token_account::instruction::create_associated_token_account(
+						&authority.key,
+						&treasury_token_account.key,
+						&mint.key,
+						&token_program.key,
+					),
+					&[
+						authority.clone(),
+						treasury_token_account.clone(),
+						treasury.clone(),
+						mint.clone(),
+						system_program.clone(),
+						token_program.clone(),
+						assc_token_program.clone(),
+					],
+					&[&[SEED, whitelist_account.key.as_ref(), &[wl_data.bump]]],
+				)?
+			}
+			// Transfer tokens from the ticket token account
+			invoke_signed(
+				&spl_token_2022::instruction::transfer_checked(
+					&token_program.key,
+					&ticket_token_account.key,
+					&mint.key,
+					&treasury_token_account.key,
+					&whitelist_account.key,
+					&[],
+					token_amount,
+					mint_decimals,
+				)?,
+				&[
+					ticket_token_account.clone(),
+					mint.clone(),
+					treasury_token_account.clone(),
+					whitelist_account.clone(),
+				],
+				&[&[
+					SEED,
+					ticket_data.owner.as_ref(),
+					whitelist_account.key.as_ref(),
+					&[ticket_data.bump],
+				]],
+			)?;
+		}
+
+		// Close ticket token account
+		invoke_signed(
+			&spl_token_2022::instruction::close_account(
+				&token_program.key,
+				&ticket_token_account.key,
+				&treasury.key,
+				&ticket_account.key,
+				&[],
+			)?,
+			&[
+				ticket_token_account.clone(),
+				treasury.clone(),
+				ticket_account.clone(),
+			],
+			&[&[
+				SEED,
+				ticket_data.owner.as_ref(),
+				whitelist_account.key.as_ref(),
+				&[ticket_data.bump],
+			]],
+		)?;
+
+		// Zero ticket data
+		ticket_account.assign(&system_program::id());
+		ticket_account.realloc(0, false)?;
+
+		// Transfer SOL from the ticket
+		invoke_signed(
+			&system_instruction::transfer(ticket_account.key, treasury.key, ticket_lamports),
+			&[
+				ticket_account.clone(),
+				treasury.clone(),
+				system_program.clone(),
+			],
+			&[&[
+				SEED,
+				ticket_data.owner.as_ref(),
+				whitelist_account.key.as_ref(),
+				&[ticket_data.bump],
+			]],
+		)?;
+
+		msg!(
+			"Ticket burned. {} tokens & {} lamports transferred to: {}",
+			token_amount,
+			(ticket_lamports + ticket_token_lamports),
+			treasury.key
+		);
 		Ok(())
 	}
 
