@@ -566,7 +566,7 @@ impl Processor {
 		// Check if the ticket token account exists if it does, we will transfer all the tokens
 		// back to the vault and then lamports back to the authority
 		if ticket_token_account.owner != &spl_token_2022::id()
-			|| ticket_token_account.owner != &spl_token::id()
+			&& ticket_token_account.owner != &spl_token::id()
 		{
 			let borrowed_ticket_token_account_data = ticket_token_account.data.borrow();
 
@@ -1001,7 +1001,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 
 		//Check to see if the `ticket_token_account` is initialised intialise it if not
 		if ticket_token_account.owner != &spl_token_2022::id()
-			|| ticket_token_account.owner != &spl_token::id()
+			&& ticket_token_account.owner != &spl_token::id()
 		{
 			invoke_signed(
 				&spl_associated_token_account::instruction::create_associated_token_account(
