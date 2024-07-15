@@ -386,8 +386,6 @@ impl Processor {
 			return Err(WhitelistError::Unauthorised.into());
 		}
 
-		// We generally don't need to check the end times as this will be handled by the state
-		// method
 		if registration_timestamp.is_some() && wl_data.registration_timestamp > clock.unix_timestamp
 		{
 			// Abort if registration has already started
@@ -665,7 +663,7 @@ impl Processor {
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let mut ticket_data = Ticket::try_from_slice(&user_ticket_account.data.borrow()[..])?;
 
-		let amount_bought = {
+		let ticket_account_token_amount = {
 			if ticket_token_account.owner == &spl_token_2022::id()
 				|| ticket_token_account.owner == &spl_token::id()
 			{
@@ -750,7 +748,7 @@ impl Processor {
 		// We check to see if the tokens already exist in the ticket token account
 		// if they do we transfer from that account to the user's token account, if they don't
 		// we must transfer from the vault
-		if amount_bought > 0 {
+		if ticket_account_token_amount > 0 {
 			invoke_signed(
 				&spl_token_2022::instruction::transfer_checked(
 					token_program.key,
