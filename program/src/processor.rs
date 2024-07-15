@@ -953,12 +953,14 @@ automatically setting the deposited token amount to fulfill the maximum required
 		let whitelist_account = next_account_info(accounts_iter)?;
 		let authority = next_account_info(accounts_iter)?;
 
+		let clock = Clock::get()?;
+
 		let mut wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
 		}
 
-		wl_data.registration_timestamp = 0;
+		wl_data.registration_timestamp = clock.unix_timestamp;
 		if !wl_data.allow_registration {
 			wl_data.allow_registration = true;
 		}
@@ -975,17 +977,14 @@ automatically setting the deposited token amount to fulfill the maximum required
 		let whitelist_account = next_account_info(accounts_iter)?;
 		let authority = next_account_info(accounts_iter)?;
 
+		let clock = Clock::get()?;
 		let mut wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 
 		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
 		}
 
-		wl_data.sale_timestamp = if wl_data.registration_timestamp > 0 {
-			wl_data.registration_timestamp
-		} else {
-			0
-		};
+		wl_data.sale_timestamp = clock.unix_timestamp;
 
 		wl_data.serialize(&mut &mut whitelist_account.data.borrow_mut()[..])?;
 

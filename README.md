@@ -130,19 +130,28 @@ Note: Each argument must be provided with a flag.
 ```
 wl-stuk start registration <MINT>
 ```
+- Commences registration upon successful transaction, will also set the `allow_registration` field to `true` and the `registration_start_timestamp` to the current unix timestamp in the whitelist account's state. `MINT` is the mint address of the token for sale.
 
 #### Start Token Sale
 ```
 wl-stuk start sale <MINT>
 ```
-```
-wl-stuk registration <MINT> <ALLOW>
-```
+- Commences the token sale upon successful transaction, will also set `sale_start_timestamp` to the current unix timestamp in the whitelist's account state. `MINT` is the mint address of the token for sale. 
 
+### Allow Registration
+```
+wl-stuk allow-register <MINT> <ALLOW>
+```
+- (`"true" / "yes" / "y", "false / "no" / "n"`) Sets the `allow_registration` flag in the whitelist's account state. `MINT` is the mint address of the token for sale and `ALLOW` is one of the values provided where `"true"`, `"yes"` and `"y"` all enable registration while `"false"`, `"no"` and `"n"` disables registration. This may also be used to freeze currently ongoing registrations but may cause errors.
+
+### Burn Tickets
+
+### Terminate Whitelist
 ```
 wl-stuk close <MINT> [RECIPIENT]
 ```
 
+### Info
 ```
 wl-stuk info whitelist <MINT>
 wl-stuk info user <MINT> <USER>
