@@ -522,7 +522,7 @@ fn main() -> Result<()> {
 				for (ticket, ticket_account, data) in whitelist_accounts {
 					let ticket_token_account =
 						spl_associated_token_account::get_associated_token_address_with_program_id(
-							&pubkey,
+							&ticket,
 							&mint,
 							&token_program,
 						);
