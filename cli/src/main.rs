@@ -50,7 +50,6 @@ enum Commands {
 	Deposit(TokenFields),
 
 	/// Withdraw tokens from the vault - authority only
-	#[command(subcommand)]
 	Withdraw(TokenFields),
 
 	/// Amend whitelist size or registration/token sale times/duration
@@ -82,6 +81,7 @@ enum Commands {
 	},
 
 	/// Burn ticket and reclaims tokens + lamports to treasury
+    #[command(subcommand)]
 	Burn(Method),
 
 	/// Terminate the whitelist and send tokens to the recipient
