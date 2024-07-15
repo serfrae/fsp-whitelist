@@ -72,40 +72,69 @@ Because of some trauma I got from trying to implement support for both versions 
 ## Usage - Seller
 `wl-stuk --help` will provide information on each command and subcommand
 
+### Initialisation
 ```
 wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGISTRATION> [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
 ```
-- Mint: The public key of the mint for the token that is to be sold, this field is used for all commands, the whitelist address is derived from it.
+- `MINT`: The public key of the mint for the token that is to be sold, this field is used for all commands, the whitelist address is derived from it.
 - `TREASURY`: The target for both SOL and token withdrawals when burning tickets.
 - `PRICE`: Price in SOL per token
 - `BUY_LIMIT`: Number of tokens a ticket is allowed to purchase.
 - `WHITELIST_SIZE`: The size of the whitelist, i.e. how many users can register for the token sale. 
-- `ALLOW_REGISTRATION`: (values: "true" / "yes" / "y", "false" / "no" / "n") Permit users to register for the whitelist.
+- `ALLOW_REGISTRATION`: (values: `"true" / "yes" / "y", "false" / "no" / "n"`) Permit users to register for the whitelist.
 - [optional]`REGISTRATION_START_TIME` (format: YYYY-MM-DD HH:MM:SS): When registration commences, a 0 value will allow immediate registration
+    - Requires flag `--registration-start-time`
 - [optional]`REGISTRATION_END_TIME` (format: YYYY-MM-DD HH:MM:SS): When registration ends, a 0 value means that registration does not end.
+    - Requires flag `--registration-end-time`
 - [optional]`SALE_START_TIME` (format: YYYY-MM-DD HH:MM:SS): When the token sale starts, a 0 value means that the sale immediately starts.
+    - Requires flag `--sale-start-time`
 - [optional]`SALE_END_TIME` (format: YYYY-MM-DD HH:MM:SS): When the token sale ends, a 0 value means that registration does not end. (WARNING: NOT RECOMMENDED).
+    - Requires flag `--sale-end-time`
 
+### User Management
 ```
 wl-stuk user add <MINT> <USER>
 wl-stuk user remove <MINT> <USER>
 ```
+- `add`: Add a user to the whitelist associated with the provided mint where `MINT` is the mint address of the token being sold and `USER` is the user's wallet address.
+- `remove`: Remove a user from the whitelist and claim rent where `MINT` is the mint address of the token being sold and `USER` is the user's wallet address.
 
+### Deposit
 ```
-wl-stuk token deposit <MINT> <AMOUNT>
-wl-stuck token withdraw 
+wl-stuk deposit <MINT> <AMOUNT>
 ```
+- Deposits tokens into the whitelist vault, where `MINT` is the mint address of the token being sold and `AMOUNT` is the amount of tokens to transfer into the vault.
 
+### Withdraw
 ```
-wl-stuk amend times <MINT> [REGISTRATION_START_TIME] [REGISTRATION_DURATION] [SALE_START_TIME] [SALE_DURATION]
-wl-stuk amend size <MINT> [SIZE]
+wl-stuk withdraw <MINT>
 ```
+- Withdraws tokens from the vault, tokens may not be withdrawn from the vault after the token sale begins. `MINT` is the mint address of the token being sold.
 
+
+### Amend
+#### Amend Whitelist Size
+```
+wl-stuk amend size <MINT> <SIZE>
+```
+- Amend the whitelist size allowing for more users to register for the token sale. Where `MINT` is the mint address of the token being sold and `SIZE` is the number of users permitted to register for the token sale.
+
+#### Amend Times
+```
+wl-stuk amend times [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
+```
+Note: Each argument must be provided with a flag.
+
+### Start
+#### Start Registration
 ```
 wl-stuk start registration <MINT>
-wl-stuk start sale <MINT>
 ```
 
+#### Start Token Sale
+```
+wl-stuk start sale <MINT>
+```
 ```
 wl-stuk registration <MINT> <ALLOW>
 ```
@@ -128,5 +157,19 @@ There are only four (4) commands relevant to a whitelist subscriber in the CLI t
 3. stukw-wl info whitelist/user <PUBKEY> <MINT>
 ```
 
-`<MINT>` is the token you wish to register/purchase, the CLI will compute the whitelist address for you and any other necessary public keys required by the program.
+### Register
+
+### Unregister
+
+### Buy
+```
+wl-stuk buy <MINT> <AMOUNT>
+```
+- Buy tokens, users may only buy tokens if they posses a ticket i.e. are registered to the whitelist, a user may not purchase more tickets than the buy limit / their ticket allowance, doing so will result in transaction failure. `MINT` is the mint address of the token being sold, `AMOUNT` is the amount of tokens a user wishes to purchase.
+
+### Info
+```
+stuk-wl info whitelist <MINT>
+stuk-wl info user <MINT> <USER_PUBKEY>
+```
 
