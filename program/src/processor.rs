@@ -621,6 +621,8 @@ impl Processor {
 
 		let user_lamports = user_ticket_account.lamports();
 
+		user_ticket_account.assign(&system_program::id());
+		user_ticket_account.realloc(0, false)?;
 		invoke_signed(
 			&system_instruction::transfer(
 				user_ticket_account.key,
@@ -636,11 +638,10 @@ impl Processor {
 				SEED,
 				user_account.key.as_ref(),
 				whitelist_account.key.as_ref(),
+                &[user_bump],
 			]],
 		)?;
 
-		user_ticket_account.assign(&system_program::id());
-		user_ticket_account.realloc(0, false)?;
 		msg!("User unregistered reclaimed: {} lamports", user_lamports);
 		Ok(())
 	}
@@ -771,6 +772,7 @@ impl Processor {
 					SEED,
 					user_account.key.as_ref(),
 					whitelist_account.key.as_ref(),
+					&[ticket_data.bump],
 				]],
 			)?;
 		}
@@ -974,7 +976,8 @@ automatically setting the deposited token amount to fulfill the maximum required
 		let system_program = next_account_info(accounts_iter)?;
 		let assc_token_program = next_account_info(accounts_iter)?;
 
-		let (ticket_addr, _) = get_user_ticket_address(&user_account.key, &whitelist_account.key);
+		let (ticket_addr, bump) =
+			get_user_ticket_address(&user_account.key, &whitelist_account.key);
 
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let borrowed_mint_data = mint.data.borrow();
@@ -1020,6 +1023,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 					SEED,
 					user_account.key.as_ref(),
 					whitelist_account.key.as_ref(),
+					&[bump],
 				]],
 			)?;
 		}
@@ -1054,7 +1058,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 					ticket_token_account.clone(),
 					whitelist_account.clone(),
 				],
-				&[&[SEED, mint.key.as_ref()]],
+				&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 			)?;
 		} else {
 			invoke_signed(
@@ -1074,7 +1078,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 					ticket_token_account.clone(),
 					whitelist_account.clone(),
 				],
-				&[&[SEED, mint.key.as_ref()]],
+				&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 			)?;
 		}
 
@@ -1093,6 +1097,10 @@ automatically setting the deposited token amount to fulfill the maximum required
 
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		wl_data.check_sale_time()?;
+
+		if &wl_data.authority != authority.key {
+			return Err(WhitelistError::Unauthorised.into());
+		}
 
 		let borrowed_mint_data = mint.data.borrow();
 		let mint_data = StateWithExtensions::<Mint>::unpack(&borrowed_mint_data)?;
@@ -1116,7 +1124,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 				recipient_token_account.clone(),
 				whitelist_account.clone(),
 			],
-			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
+			&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 		)?;
 
 		msg!("Withdrawn: {}", token_amount);
@@ -1163,7 +1171,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 					recipient_token_account.clone(),
 					whitelist_account.clone(),
 				],
-				&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
+				&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 			)?;
 		}
 
@@ -1176,10 +1184,12 @@ automatically setting the deposited token amount to fulfill the maximum required
 				&[],
 			)?,
 			&[vault.clone(), authority.clone(), whitelist_account.clone()],
-			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
+			&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 		)?;
 
 		// Close whitelist and reclaim lamports
+		whitelist_account.assign(&system_program::id());
+		whitelist_account.realloc(0, false)?;
 		invoke_signed(
 			&system_instruction::transfer(whitelist_account.key, authority.key, whitelist_lamports),
 			&[
@@ -1187,7 +1197,7 @@ automatically setting the deposited token amount to fulfill the maximum required
 				recipient_account.clone(),
 				system_program.clone(),
 			],
-			&[&[SEED, mint.key.as_ref(), authority.key.as_ref()]],
+			&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
 		)?;
 
 		msg!(
@@ -1782,8 +1792,7 @@ mod tests {
 		let user = Keypair::new();
 		let (ticket, _) = get_user_ticket_address(&user.pubkey(), &whitelist);
 
-		let ix_true =
-			crate::instructions::register(&whitelist, &user.pubkey(), &ticket).unwrap();
+		let ix_true = crate::instructions::register(&whitelist, &user.pubkey(), &ticket).unwrap();
 
 		let mut transaction = Transaction::new_with_payer(&[ix_true], Some(&payer.pubkey()));
 		transaction.sign(&[payer], recent_blockhash);
