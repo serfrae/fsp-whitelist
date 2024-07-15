@@ -81,7 +81,7 @@ enum Commands {
 	},
 
 	/// Burn ticket and reclaims tokens + lamports to treasury
-    #[command(subcommand)]
+	#[command(subcommand)]
 	Burn(Method),
 
 	/// Terminate the whitelist and send tokens to the recipient
@@ -519,14 +519,17 @@ fn main() -> Result<()> {
 				// threads depending on number of cores on a machine to parallel
 				// execute the withdrawals to reduce execution time for now let's
 				// just do this single threadedly
+				let mut failures: u64;
+				let mut failed_accounts: Vec<Pubkey> = Vec::with_capacity(whitelist_accounts.len());
 				for (ticket, ticket_account, data) in whitelist_accounts {
+					// want this to continue on failure
 					let ticket_token_account =
 						spl_associated_token_account::get_associated_token_address_with_program_id(
 							&ticket,
 							&mint,
 							&token_program,
 						);
-					let instruction = instructions::burn_ticket(
+					let instruction = match instructions::burn_ticket(
 						&whitelist,
 						&wallet_pubkey,
 						&mint,
@@ -535,19 +538,60 @@ fn main() -> Result<()> {
 						&ticket,
 						&ticket_token_account,
 						&token_program,
-					)
-					.map_err(|err| anyhow!("Unable to create `RemoveUser` instruction: {}", err))?;
+					) {
+						Ok(ix) => ix,
+						Err(_) => {
+							println!(
+								"Unable to create `BurnTicket` instruction for: {}, reason: {}",
+								ticket, e
+							);
+							failures += 1;
+							failed_account.push(ticket);
+							continue;
+						}
+					};
 					let mut transaction =
-						Transaction::new_with_payer(&[instruction], Some(&wallet_pubkey));
-					let latest_blockhash = client
-						.get_latest_blockhash()
-						.map_err(|err| anyhow!("Unable to get latest blockhash: {}", err))?;
+						match Transaction::new_with_payer(&[instruction], Some(&wallet_pubkey)) {
+							Ok(tx) => tx,
+							Err(e) => {
+								println!(
+									"Unable to create transaction for: {}, reason: {}",
+									ticket, e
+								);
+								failures += 1;
+								failed_accounts.push(ticket);
+								continue;
+							}
+						};
+					let latest_blockhash = match client.get_latest_blockhash() {
+						Ok(bh) => bh,
+						Err(e) => {
+							println!(
+								"Unable to get latest blockhash for: {}, reason: {}",
+								ticket, e
+							);
+							failures += 1;
+							failed_accounts.push(ticket);
+							continue;
+						}
+					};
 					transaction.sign(&[&wallet_keypair], latest_blockhash);
-					let txid = client
-						.send_and_confirm_transaction_with_spinner(&transaction)
-						.map_err(|err| anyhow!("Unable to send transaction: {}", err))?;
+					let txid = match client.send_and_confirm_transaction_with_spinner(&transaction)
+					{
+						Ok(tx) => tx,
+						Err(e) => {
+							println!("Unable to send transaction for: {}, reason: {}", ticket, e);
+							failures += 1;
+							failed_accounts.push(ticket);
+							continue;
+						}
+					};
+                    println!("Ticket burned: {}", ticket);
 					println!("TXID: {}", txid);
 				}
+				println!("Complete");
+				println!("Number of failures: {}", failures);
+				println!("Failed accounts: {}", failed_accounts);
 				std::process::exit(1);
 			}
 		},
