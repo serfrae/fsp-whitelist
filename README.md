@@ -73,8 +73,18 @@ Because of some trauma I got from trying to implement support for both versions 
 `wl-stuk --help` will provide information on each command and subcommand
 
 ```
-wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> [WHITELIST_SIZE] [ALLOW_REGISTRATION] [REGISTRATION_START_TIME] [REGISTRATION_DURATION] [SALE_START_TIME] [SALE_DURATION]
+wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGISTRATION> [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
 ```
+- Mint: The public key of the mint for the token that is to be sold, this field is used for all commands, the whitelist address is derived from it.
+- `TREASURY`: The target for both SOL and token withdrawals when burning tickets.
+- `PRICE`: Price in SOL per token
+- `BUY_LIMIT`: Number of tokens a ticket is allowed to purchase.
+- `WHITELIST_SIZE`: The size of the whitelist, i.e. how many users can register for the token sale. 
+- `ALLOW_REGISTRATION`: (values: "true" / "yes" / "y", "false" / "no" / "n") Permit users to register for the whitelist.
+- [optional]`REGISTRATION_START_TIME` (format: YYYY-MM-DD HH:MM:SS): When registration commences, a 0 value will allow immediate registration
+- [optional]`REGISTRATION_END_TIME` (format: YYYY-MM-DD HH:MM:SS): When registration ends, a 0 value means that registration does not end.
+- [optional]`SALE_START_TIME` (format: YYYY-MM-DD HH:MM:SS): When the token sale starts, a 0 value means that the sale immediately starts.
+- [optional]`SALE_END_TIME` (format: YYYY-MM-DD HH:MM:SS): When the token sale ends, a 0 value means that registration does not end. (WARNING: NOT RECOMMENDED).
 
 ```
 wl-stuk user add <MINT> <USER>
