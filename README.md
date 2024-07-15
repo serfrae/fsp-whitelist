@@ -70,11 +70,11 @@ addresses from within the CLI, although I may implement this at a later date.
 Because of some trauma I got from trying to implement support for both versions of the token program, both the CLI and the program will check the mint for the owner and use that to pass the correct token program.
 
 ## Usage - Seller
-`wl-stuk --help` will provide information on each command and subcommand
+`stuk-wl --help` will provide information on each command and subcommand
 
 ### Initialisation
 ```
-wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGISTRATION> [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
+stuk-wl init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGISTRATION> [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
 ```
 - `MINT`: The public key of the mint for the token that is to be sold, this field is used for all commands, the whitelist address is derived from it.
 - `TREASURY`: The target for both SOL and token withdrawals when burning tickets.
@@ -93,21 +93,21 @@ wl-stuk init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGIS
 
 ### User Management
 ```
-wl-stuk user add <MINT> <USER>
-wl-stuk user remove <MINT> <USER>
+stuk-wl user add <MINT> <USER>
+stuk-wl user remove <MINT> <USER>
 ```
 - `add`: Add a user to the whitelist associated with the provided mint where `MINT` is the mint address of the token being sold and `USER` is the user's wallet address.
 - `remove`: Remove a user from the whitelist and claim rent where `MINT` is the mint address of the token being sold and `USER` is the user's wallet address.
 
 ### Deposit
 ```
-wl-stuk deposit <MINT> <AMOUNT>
+stuk-wl deposit <MINT> <AMOUNT>
 ```
 - Deposits tokens into the whitelist vault, where `MINT` is the mint address of the token being sold and `AMOUNT` is the amount of tokens to transfer into the vault.
 
 ### Withdraw
 ```
-wl-stuk withdraw <MINT>
+stuk-wl withdraw <MINT>
 ```
 - Withdraws tokens from the vault, tokens may not be withdrawn from the vault after the token sale begins. `MINT` is the mint address of the token being sold.
 
@@ -115,46 +115,58 @@ wl-stuk withdraw <MINT>
 ### Amend
 #### Amend Whitelist Size
 ```
-wl-stuk amend size <MINT> <SIZE>
+stuk-wl amend size <MINT> <SIZE>
 ```
 - Amend the whitelist size allowing for more users to register for the token sale. Where `MINT` is the mint address of the token being sold and `SIZE` is the number of users permitted to register for the token sale.
 
 #### Amend Times
 ```
-wl-stuk amend times [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
+stuk-wl amend times [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
 ```
 Note: Each argument must be provided with a flag.
 
 ### Start
 #### Start Registration
 ```
-wl-stuk start registration <MINT>
+stuk-wl start registration <MINT>
 ```
 - Commences registration upon successful transaction, will also set the `allow_registration` field to `true` and the `registration_start_timestamp` to the current unix timestamp in the whitelist account's state. `MINT` is the mint address of the token for sale.
 
 #### Start Token Sale
 ```
-wl-stuk start sale <MINT>
+stuk-wl start sale <MINT>
 ```
 - Commences the token sale upon successful transaction, will also set `sale_start_timestamp` to the current unix timestamp in the whitelist's account state. `MINT` is the mint address of the token for sale. 
 
 ### Allow Registration
 ```
-wl-stuk allow-register <MINT> <ALLOW>
+stuk-wl allow-register <MINT> <ALLOW>
 ```
 - (`"true" / "yes" / "y", "false / "no" / "n"`) Sets the `allow_registration` flag in the whitelist's account state. `MINT` is the mint address of the token for sale and `ALLOW` is one of the values provided where `"true"`, `"yes"` and `"y"` all enable registration while `"false"`, `"no"` and `"n"` disables registration. This may also be used to freeze currently ongoing registrations but may cause errors.
 
 ### Burn Tickets
+#### Burn a single ticket
+```
+stuk-wl burn single <MINT> <USER>
+
+```
+- Burns a single ticket and retrieves the tokens and SOL associated with the ticket. Tokens and SOL are sent to the treasury address defined in the whitelist's state. `MINT` is the mint address of the token for sale, `USER` is the wallet address of the user who purchased the ticket. 
+
+#### Burn all tickets
+```
+stuk-wl burn bulk <MINT>
+```
+- Burns all tickets associated with a whitelist and retrieves the tokens and SOL associated with those tickets. Tokens and SOL are sent to the treasury address defined in the whitelist's state. `MINT` is the mint address for the token for sale.
 
 ### Terminate Whitelist
 ```
-wl-stuk close <MINT> [RECIPIENT]
+stuk-wl close <MINT> [RECIPIENT]
 ```
 
 ### Info
 ```
-wl-stuk info whitelist <MINT>
-wl-stuk info user <MINT> <USER>
+stuk-wl info whitelist <MINT> 
+stuk-wl info user <MINT> <USER>
 ```
 
 ## Usage - User
@@ -171,8 +183,8 @@ There are only four (4) commands relevant to a whitelist subscriber in the CLI t
 ### Unregister
 
 ### Buy
-```
-wl-stuk buy <MINT> <AMOUNT>
+``` 
+stuk-wl buy <MINT> <AMOUNT>
 ```
 - Buy tokens, users may only buy tokens if they posses a ticket i.e. are registered to the whitelist, a user may not purchase more tickets than the buy limit / their ticket allowance, doing so will result in transaction failure. `MINT` is the mint address of the token being sold, `AMOUNT` is the amount of tokens a user wishes to purchase.
 
