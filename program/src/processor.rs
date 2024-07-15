@@ -89,7 +89,7 @@ impl Processor {
 			WhitelistInstruction::WithdrawTokens { amount } => {
 				Self::process_withdraw_tokens(accounts, amount)
 			}
-            WhitelistInstruction::BurnTicket => Self::process_burn_ticket(accounts),
+			WhitelistInstruction::BurnTicket => Self::process_burn_ticket(accounts),
 			WhitelistInstruction::TerminateWhitelist => Self::process_terminate_whitelist(accounts),
 		}
 	}
@@ -311,15 +311,24 @@ impl Processor {
 		let accounts_iter = &mut accounts.iter();
 		let whitelist_account = next_account_info(accounts_iter)?;
 		let authority = next_account_info(accounts_iter)?;
-		let _mint = next_account_info(accounts_iter)?;
+		let mint = next_account_info(accounts_iter)?;
 		let user_account = next_account_info(accounts_iter)?;
 		let user_ticket_account = next_account_info(accounts_iter)?;
 		let system_program = next_account_info(accounts_iter)?;
 
+		let (wl, _bump) = get_whitelist_address(&mint.key);
 		let (user_ticket, user_bump) =
 			get_user_ticket_address(&user_account.key, &whitelist_account.key);
-
+		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let ticket_data = Ticket::try_from_slice(&user_ticket_account.data.borrow()[..])?;
+
+		if !authority.is_signer || authority.key != &wl_data.authority {
+			return Err(WhitelistError::Unauthorised.into());
+		}
+
+		if whitelist_account.key != &wl {
+			return Err(WhitelistError::InvalidWhitelistAddress.into());
+		}
 
 		if user_ticket_account.key != &user_ticket || user_bump != ticket_data.bump {
 			return Err(WhitelistError::IncorrectUserAccount.into());
@@ -359,7 +368,7 @@ impl Processor {
 
 		let mut wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 
-		if authority.key != &wl_data.authority {
+		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
 		}
 
@@ -383,7 +392,7 @@ impl Processor {
 
 		let mut wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 
-		if authority.key != &wl_data.authority {
+		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
 		}
 
@@ -428,7 +437,7 @@ impl Processor {
 
 		let mut wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 
-		if authority.key != &wl_data.authority {
+		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
 		}
 
@@ -528,6 +537,18 @@ impl Processor {
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let ticket_data = Ticket::try_from_slice(&user_ticket_account.data.borrow()[..])?;
 
+		if authority.key != &wl_data.authority {
+			return Err(WhitelistError::AccountMismatch.into());
+		}
+
+		if vault.key != &wl_data.vault {
+			return Err(WhitelistError::IncorrectVaultAddress.into());
+		}
+
+		if mint.key != &wl_data.mint {
+			return Err(WhitelistError::IncorrectMintAddress.into());
+		}
+
 		if user_account.key != &ticket_data.owner {
 			return Err(WhitelistError::Unauthorised.into());
 		}
@@ -544,6 +565,9 @@ impl Processor {
 			return Err(WhitelistError::IncorrectUserAccount.into());
 		}
 
+		if token_program.key != &spl_token_2022::id() && token_program.key != &spl_token::id() {
+			return Err(ProgramError::IncorrectProgramId);
+		}
 		if system_program.key != &system_program::id() {
 			return Err(ProgramError::IncorrectProgramId);
 		}
@@ -663,6 +687,14 @@ impl Processor {
 
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		let mut ticket_data = Ticket::try_from_slice(&user_ticket_account.data.borrow()[..])?;
+
+		if vault.key != &wl_data.vault {
+			return Err(WhitelistError::IncorrectVaultAddress.into());
+		}
+
+		if mint.key != &wl_data.mint {
+			return Err(WhitelistError::IncorrectMintAddress.into());
+		}
 
 		let ticket_account_token_amount = {
 			if ticket_token_account.owner == &spl_token_2022::id()
@@ -849,7 +881,7 @@ impl Processor {
 			return Err(WhitelistError::IncorrectMintAddress.into());
 		}
 
-		if token_program.key != &spl_token_2022::id() {
+		if token_program.key != &spl_token_2022::id() && token_program.key != &spl_token::id() {
 			return Err(ProgramError::IncorrectProgramId);
 		}
 
@@ -985,6 +1017,10 @@ automatically setting the deposited token amount to fulfill the maximum required
 		let ticket_token_account_data =
 			StateWithExtensions::<Account>::unpack(&borrowed_ticket_token_account_data)?;
 
+		if whitelist_account.owner != &crate::id() {
+			return Err(WhitelistError::InvalidWhitelistAddress.into());
+		}
+
 		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
 		}
@@ -1039,47 +1075,25 @@ automatically setting the deposited token amount to fulfill the maximum required
 			transfer_amount = wl_data.buy_limit;
 		}
 
-		if token_program.key == &spl_token_2022::id() {
-			invoke_signed(
-				&spl_token_2022::instruction::transfer_checked(
-					token_program.key,
-					vault.key,
-					mint.key,
-					ticket_token_account.key,
-					authority.key,
-					&[],
-					transfer_amount,
-					mint_data.base.decimals,
-				)?,
-				&[
-					vault.clone(),
-					mint.clone(),
-					ticket_token_account.clone(),
-					whitelist_account.clone(),
-				],
-				&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
-			)?;
-		} else {
-			invoke_signed(
-				&spl_token::instruction::transfer_checked(
-					token_program.key,
-					vault.key,
-					mint.key,
-					ticket_token_account.key,
-					authority.key,
-					&[],
-					transfer_amount,
-					mint_data.base.decimals,
-				)?,
-				&[
-					vault.clone(),
-					mint.clone(),
-					ticket_token_account.clone(),
-					whitelist_account.clone(),
-				],
-				&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
-			)?;
-		}
+		invoke_signed(
+			&spl_token_2022::instruction::transfer_checked(
+				token_program.key,
+				vault.key,
+				mint.key,
+				ticket_token_account.key,
+				authority.key,
+				&[],
+				transfer_amount,
+				mint_data.base.decimals,
+			)?,
+			&[
+				vault.clone(),
+				mint.clone(),
+				ticket_token_account.clone(),
+				whitelist_account.clone(),
+			],
+			&[&[SEED, mint.key.as_ref(), &[wl_data.bump]]],
+		)?;
 
 		Ok(())
 	}
@@ -1097,8 +1111,24 @@ automatically setting the deposited token amount to fulfill the maximum required
 		let wl_data = Whitelist::try_from_slice(&whitelist_account.data.borrow()[..])?;
 		wl_data.check_sale_time()?;
 
-		if &wl_data.authority != authority.key {
+		if whitelist_account.owner != &crate::id() {
+			return Err(WhitelistError::InvalidWhitelistAddress.into());
+		}
+
+		if !authority.is_signer || authority.key != &wl_data.authority {
 			return Err(WhitelistError::Unauthorised.into());
+		}
+
+		if vault.key != &wl_data.vault {
+			return Err(WhitelistError::IncorrectVaultAddress.into());
+		}
+
+		if mint.key != &wl_data.mint {
+			return Err(WhitelistError::IncorrectMintAddress.into());
+		}
+
+		if token_program.key != &spl_token_2022::id() && token_program.key != &spl_token::id() {
+			return Err(ProgramError::IncorrectProgramId);
 		}
 
 		let borrowed_mint_data = mint.data.borrow();
@@ -1440,12 +1470,13 @@ mod tests {
 		banks_client: &mut BanksClient,
 		payer: &Keypair,
 		recent_blockhash: &Hash,
+		wallet: &Pubkey,
 		mint: &Keypair,
 		token_program_id: &Pubkey,
 	) -> Pubkey {
 		let token_account =
 			spl_associated_token_account::get_associated_token_address_with_program_id(
-				&payer.pubkey(),
+				wallet,
 				&mint.pubkey(),
 				&token_program_id,
 			);
@@ -1752,11 +1783,17 @@ mod tests {
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
+			&payer.pubkey(),
 			&mint,
 			&token_program_id,
 		)
 		.await;
 
+		// Very unsure why this fails
+		// Error is invalid account data but it seems all the accounts are correct
+		// One would assume that maybe the token account isn't initialised at this point as
+		// the cause for these failures, but including the account in the same instruction
+		// also seems to fail
 		mint_tokens(
 			&mut banks_client,
 			&payer,
