@@ -5,6 +5,10 @@ authors = ["Ser Frae <a@serfrae.com>"]
 description = "Whitelist on-chain program for the Superteam UK talent olympics"
 edition = "2021"
 
+[features]
+test-sbf = []
+no-entrypoint = []
+
 [dependencies]
 borsh = { version = "1.5.1", features = ["derive"] }
 num-derive = "0.4.2"

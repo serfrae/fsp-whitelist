@@ -263,7 +263,7 @@ fn main() -> Result<()> {
 
 	let instruction: Instruction = match args.cmd {
 		Commands::Init(fields) => {
-			let (whitelist, _) = get_whitelist_address(&fields.mint);
+			let whitelist = get_whitelist_address(&fields.mint).0;
 
 			// Retrieve the correct token program from the mint's owner
 			let mint_account = client.get_account(&fields.mint)?;
@@ -345,8 +345,8 @@ fn main() -> Result<()> {
 		}
 		Commands::User(subcommand) => match subcommand {
 			UserManagement::Add(fields) => {
-				let (whitelist, _) = get_whitelist_address(&fields.mint);
-				let (user_ticket, _) = get_user_ticket_address(&fields.user, &whitelist);
+				let whitelist = get_whitelist_address(&fields.mint).0;
+				let user_ticket = get_user_ticket_address(&fields.user, &whitelist).0;
 
 				println!("User Whitelist Account: {}", user_ticket);
 
@@ -377,8 +377,8 @@ fn main() -> Result<()> {
 			}
 		},
 		Commands::Buy(fields) => {
-			let (whitelist, _) = get_whitelist_address(&fields.mint);
-			let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
+			let whitelist = get_whitelist_address(&fields.mint).0;
+			let user_ticket = get_user_ticket_address(&wallet_pubkey, &whitelist).0;
 
 			let mint_account = client.get_account(&fields.mint)?;
 			let token_program = mint_account.owner;
@@ -417,7 +417,7 @@ fn main() -> Result<()> {
 			.map_err(|err| anyhow!("Unable to create `BuyTokens` instruction: {}", err))?
 		}
 		Commands::Deposit(fields) => {
-			let (whitelist, _) = get_whitelist_address(&fields.mint);
+			let whitelist = get_whitelist_address(&fields.mint).0;
 			let mint_account = client.get_account(&fields.mint)?;
 			let token_program = mint_account.owner;
 
@@ -444,7 +444,7 @@ fn main() -> Result<()> {
 			.map_err(|err| anyhow!("Unable to create `DepositTokens` instruction: {}", err))?
 		}
 		Commands::Withdraw(fields) => {
-			let (whitelist, _) = get_whitelist_address(&fields.mint);
+			let whitelist = get_whitelist_address(&fields.mint).0;
 			let mint_account = client.get_account(&fields.mint)?;
 			let token_program = mint_account.owner;
 
@@ -476,8 +476,8 @@ fn main() -> Result<()> {
 		}
 		Commands::Burn(method) => match method {
 			Method::Single(fields) => {
-				let (whitelist, _) = get_whitelist_address(&fields.mint);
-				let (user_ticket, _) = get_user_ticket_address(&fields.user, &whitelist);
+				let whitelist = get_whitelist_address(&fields.mint).0;
+				let user_ticket = get_user_ticket_address(&fields.user, &whitelist).0;
 
 				println!("Removing user from whitelist: {}", fields.user);
 				println!("Whitelist Account: {}", user_ticket);
@@ -519,9 +519,10 @@ fn main() -> Result<()> {
 				// threads depending on number of cores on a machine to parallel
 				// execute the withdrawals to reduce execution time for now let's
 				// just do this single threadedly
-				let mut failures: u64;
-				let mut failed_accounts: Vec<Pubkey> = Vec::with_capacity(whitelist_accounts.len());
-				for (ticket, ticket_account, data) in whitelist_accounts {
+				let mut failures = 0;
+				let mut failed_accounts: Vec<&Pubkey> =
+					Vec::with_capacity(whitelist_accounts.len());
+				for (ticket, _ticket_account, _data) in whitelist_accounts {
 					// want this to continue on failure
 					let ticket_token_account =
 						spl_associated_token_account::get_associated_token_address_with_program_id(
@@ -540,29 +541,18 @@ fn main() -> Result<()> {
 						&token_program,
 					) {
 						Ok(ix) => ix,
-						Err(_) => {
+						Err(e) => {
 							println!(
 								"Unable to create `BurnTicket` instruction for: {}, reason: {}",
 								ticket, e
 							);
 							failures += 1;
-							failed_account.push(ticket);
+							failed_accounts.push(ticket);
 							continue;
 						}
 					};
 					let mut transaction =
-						match Transaction::new_with_payer(&[instruction], Some(&wallet_pubkey)) {
-							Ok(tx) => tx,
-							Err(e) => {
-								println!(
-									"Unable to create transaction for: {}, reason: {}",
-									ticket, e
-								);
-								failures += 1;
-								failed_accounts.push(ticket);
-								continue;
-							}
-						};
+						Transaction::new_with_payer(&[instruction], Some(&wallet_pubkey));
 					let latest_blockhash = match client.get_latest_blockhash() {
 						Ok(bh) => bh,
 						Err(e) => {
@@ -586,19 +576,19 @@ fn main() -> Result<()> {
 							continue;
 						}
 					};
-                    println!("Ticket burned: {}", ticket);
+					println!("Ticket burned: {}", ticket);
 					println!("TXID: {}", txid);
 				}
 				println!("Complete");
 				println!("Number of failures: {}", failures);
-				println!("Failed accounts: {}", failed_accounts);
+				println!("Failed accounts: {:?}", failed_accounts);
 				std::process::exit(1);
 			}
 		},
 		Commands::Amend(detail) => {
 			match detail {
 				Detail::Size { mint, size } => {
-					let (whitelist, _) = get_whitelist_address(&mint);
+					let whitelist = get_whitelist_address(&mint).0;
 					instructions::amend_whitelist_size(&whitelist, &wallet_pubkey, size).map_err(
 						|err| anyhow!("Unable to create `AmendWhitelistSize` instruction: {}", err),
 					)?
@@ -610,7 +600,7 @@ fn main() -> Result<()> {
 					sale_start_time,
 					sale_end_time,
 				} => {
-					let (whitelist, _) = get_whitelist_address(&mint);
+					let whitelist = get_whitelist_address(&mint).0;
 
 					let whitelist_account = client.get_account_data(&whitelist)?;
 					let wl_data = stuk_wl::state::Whitelist::try_from_slice(&whitelist_account)?;
@@ -679,20 +669,20 @@ fn main() -> Result<()> {
 		}
 		Commands::Start(start) => match start {
 			Start::Registration { mint } => {
-				let (whitelist, _) = get_whitelist_address(&mint);
+				let whitelist = get_whitelist_address(&mint).0;
 				instructions::start_registration(&whitelist, &wallet_pubkey).map_err(|err| {
 					anyhow!("Unable to create `StartRegistration` instruction: {}", err)
 				})?
 			}
 			Start::Sale { mint } => {
-				let (whitelist, _) = get_whitelist_address(&mint);
+				let whitelist = get_whitelist_address(&mint).0;
 				instructions::start_token_sale(&whitelist, &wallet_pubkey).map_err(|err| {
 					anyhow!("Unable to create `StartTokenSale` instruction: {}", err)
 				})?
 			}
 		},
 		Commands::AllowRegister { allow, mint } => {
-			let (whitelist, _) = get_whitelist_address(&mint);
+			let whitelist = get_whitelist_address(&mint).0;
 			let allow_bool = match allow.as_str() {
 				"true" | "yes" | "y" => true,
 				"false" | "no" | "n" => false,
@@ -703,14 +693,12 @@ fn main() -> Result<()> {
 			)?
 		}
 		Commands::Register { mint } => {
-			let (whitelist, _) = get_whitelist_address(&mint);
-			let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
-			println!("Getting data");
+			let whitelist = get_whitelist_address(&mint).0;
+			let user_ticket = get_user_ticket_address(&wallet_pubkey, &whitelist).0;
 			let whitelist_data = client.get_account_data(&whitelist)?;
 			let wl_data = stuk_wl::state::Whitelist::try_from_slice(&whitelist_data)?;
 
 			if wl_data.whitelist_size > 0 && {
-				println!("Getting accounts");
 				let whitelist_accounts = client.get_program_accounts(&whitelist).unwrap();
 				let mut accounts = Vec::new();
 				for (pubkey, account) in whitelist_accounts {
@@ -723,13 +711,14 @@ fn main() -> Result<()> {
 				println!("Whitelist full");
 				std::process::exit(2);
 			}
+            println!("Ticket: {}", user_ticket);
 
 			instructions::register(&whitelist, &wallet_pubkey, &user_ticket)
 				.map_err(|err| anyhow!("Unable to create `Register` instruction: {}", err))?
 		}
 		Commands::Unregister { mint } => {
-			let (whitelist, _) = get_whitelist_address(&mint);
-			let (user_ticket, _) = get_user_ticket_address(&wallet_pubkey, &whitelist);
+			let whitelist = get_whitelist_address(&mint).0;
+			let user_ticket = get_user_ticket_address(&wallet_pubkey, &whitelist).0;
 
 			let mint_account = client.get_account(&mint)?;
 			let token_program = mint_account.owner;
@@ -763,7 +752,7 @@ fn main() -> Result<()> {
 			.map_err(|err| anyhow!("Unable to create `Unregister` instruction: {}", err))?
 		}
 		Commands::Close { mint, recipient } => {
-			let (whitelist, _) = get_whitelist_address(&mint);
+			let whitelist = get_whitelist_address(&mint).0;
 			let mint_account = client.get_account(&mint)?;
 			let token_program = mint_account.owner;
 			let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
@@ -795,7 +784,7 @@ fn main() -> Result<()> {
 		}
 		Commands::Info(info) => match info {
 			Info::Whitelist { mint } => {
-				let (whitelist, _) = get_whitelist_address(&mint);
+				let whitelist = get_whitelist_address(&mint).0;
 
 				let mint_decimals = {
 					let mint_account = client.get_account_data(&mint)?;
@@ -834,8 +823,10 @@ fn main() -> Result<()> {
 					)?;
 					mint_data.base.decimals
 				};
-				let (whitelist, _) = get_whitelist_address(&mint);
-				let (ticket, _) = get_user_ticket_address(&user, &whitelist);
+				let whitelist = get_whitelist_address(&mint).0;
+				let ticket = get_user_ticket_address(&user, &whitelist).0;
+				let ticket_ata =
+					spl_associated_token_account::get_associated_token_address(&ticket, &mint);
 
 				let data = client.get_account_data(&ticket).unwrap().clone();
 				let d = stuk_wl::state::Ticket::try_from_slice(&data)?;
@@ -843,6 +834,8 @@ fn main() -> Result<()> {
 				let allowance = spl_token_2022::amount_to_ui_amount(d.allowance, mint_decimals);
 				let amount_bought =
 					spl_token_2022::amount_to_ui_amount(d.amount_bought, mint_decimals);
+				println!("Ticket address: {}", ticket);
+				println!("Ticket ata address: {}", ticket_ata);
 				println!("Ticket owner: {}", d.owner);
 				println!("Ticket payer: {}", d.payer);
 				println!("Ticket allowance: {}", allowance);
