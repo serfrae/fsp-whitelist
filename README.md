@@ -6,7 +6,7 @@ This program and it's associated client and blink permit users to register for a
 
 The reason for populating fixtures is there seems to be some limitations using CPIs to the system program when using `solana-program-test` and thus testing creating associated token accounts results in empty accounts although the test succeeds as the associated token program calls the system program with `invoke-signed` to create token accounts, tests will be updated to reflect this shortly.
 
-`testing.py` is meant only for testing utilising `cargo test`, it will not remove the `test-pid.json` so if you wish to test functionality on a your own with `solana-test-validator` you may do so by redeploying the program, as it will already be compiled all that is required is running `solana program deploy ./program/target/stuk_wl.so --program-id test-pid.json` from the project root directory. 
+`testing.py` is most only for testing utilising `cargo test`, although it does compile both the CLI and the program with the generated program id for further testing purposes. It will not remove the `test-pid.json` so if you wish to test functionality on a your own with `solana-test-validator` you may do so by redeploying the program to your selected network. As the program will already be compiled all that is required is running `solana program deploy ./program/target/stuk_wl.so --program-id test-pid.json` from the project root directory. 
 
 ## Implementation
 This program allows for a whitelist-gated token sale. It supports both spl_token and spl_token_2022 accounts and is intended to
