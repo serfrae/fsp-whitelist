@@ -252,8 +252,23 @@ fn main() -> Result<()> {
 		solana_cli_config::Config::default()
 	};
 
-	let wallet_keypair = read_keypair_file(&solana_config_file.keypair_path)
-		.map_err(|err| anyhow!("Unable to read keypair file: {}", err))?;
+	let wallet_keypair = if let Some(payer) = args.payer {
+		match read_keypair_file(&payer) {
+			Ok(keypair) => keypair,
+			Err(e) => {
+				eprintln!(
+					"Unable to read provided keypair file, attempting to set to default: {}",
+					e
+				);
+				read_keypair_file(&solana_config_file.keypair_path)
+					.map_err(|err| anyhow!("Unable to read keypair file: {}", err))?
+			}
+		}
+	} else {
+		read_keypair_file(&solana_config_file.keypair_path)
+			.map_err(|err| anyhow!("Unable to read keypair file: {}", err))?
+	};
+
 	let wallet_pubkey = wallet_keypair.pubkey();
 
 	let client = RpcClient::new_with_commitment(
@@ -711,7 +726,7 @@ fn main() -> Result<()> {
 				println!("Whitelist full");
 				std::process::exit(2);
 			}
-            println!("Ticket: {}", user_ticket);
+			println!("Ticket: {}", user_ticket);
 
 			instructions::register(&whitelist, &wallet_pubkey, &user_ticket)
 				.map_err(|err| anyhow!("Unable to create `Register` instruction: {}", err))?

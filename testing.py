@@ -3,6 +3,7 @@ import subprocess
 import time
 
 TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 
 current_dir = os.getcwd()
 subfolder_path = "program/tests/fixtures"
@@ -10,50 +11,189 @@ print(f"Current working directory: {current_dir}")
 test_path = os.path.join(current_dir, subfolder_path)
 print(f"Target for account binaries: {test_path}")
 
+accounts: dict[str, str] = {}
+
+
+# For auto-enter
+def create_keypair(keypair: str):
+    subprocess.Popen(
+        [
+            "solana-keygen",
+            "new",
+            "--force",
+            "--no-bip39-passphrase",
+            "--outfile",
+            f"{current_dir}/{keypair}.json",
+        ],
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def get_address(keypair: str) -> str:
+    return subprocess.run(
+        ["solana", "address", "-k", f"{current_dir}/{keypair}.json"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def create_mint(keypair: str, token_program: int | None) -> str:
+    command = [
+        "spl-token",
+        "create-token",
+        "--program-id",
+        "",
+        "--fee-payer",
+        f"{current_dir}/payer.json",
+        "--mint-authority",
+        f"{current_dir}/payer.json",
+    ]
+
+    if token_program == 2022:
+        command[3] = TOKEN_2022
+    else:
+        command[3] = TOKEN
+
+    return (
+        subprocess.run(command, capture_output=True, text=True)
+        .stdout.strip()
+        .split("\n")[0]
+        .split()[2]
+        .strip()
+    )
+
+
+def create_token_account(
+    mint_address: str, owner_address: str, token_program: int | None
+) -> str:
+    command = [
+        "spl-token",
+        "create-account",
+        "--program-id",
+        "",
+        "--fee-payer",
+        f"{current_dir}/payer.json",
+        "--owner",
+        owner_address,
+        mint_address,
+    ]
+
+    if token_program == 2022:
+        command[3] = TOKEN_2022
+    else:
+        command[3] = TOKEN
+
+    return (
+        subprocess.run(command, capture_output=True, text=True)
+        .stdout.strip()
+        .split("\n")[0]
+        .split()[2]
+        .strip()
+    )
+
+
+def create_ticket(mint_address: str) -> str:
+    command = [
+        "stuk-wl",
+        "--payer",
+        f"{current_dir}/payer.json",
+        "register",
+        mint_address,
+    ]
+    return (
+        subprocess.run(command, capture_output=True, text=True)
+        .stdout.strip()
+        .split()[1]
+        .strip()
+    )
+
+
+def create_whitelist(mint_address: str, wallet_address: str) -> str:
+    command = [
+        "stuk-wl",
+        "--payer",
+        f"{current_dir}/payer.json",
+        "init",
+        mint_address,
+        wallet_address,
+        "1",
+        "10",
+        "5",
+    ]
+    return (
+        subprocess.run(command, capture_output=True, text=True)
+        .stdout.strip()
+        .split("\n")[0]
+        .split()[2]
+        .strip()
+    )
+
+
+def allow_registration(mint_address: str) -> None:
+    command = [
+        "stuk-wl",
+        "--payer",
+        f"{current_dir}/payer.json",
+        "allow-register",
+        mint_address,
+        "true",
+    ]
+    subprocess.run(command)
+
+
+def generate_account_binary(bin_name: str, account: str) -> None:
+    command = [
+        "solana",
+        "account",
+        account,
+        "--output-file",
+        f"{test_path}/{account}.bin",
+    ]
+    subprocess.run(command)
+
+
 # Generate program id keypair
 print("Generating program id keypair...")
-subprocess.run(
-    ["solana-keygen", "new", "--force", "--outfile", f"{current_dir}/test-pid.json"]
-)
-program_id = subprocess.run(
-    ["solana", "address", "-k", f"{current_dir}/test-pid.json"],
-    capture_output=True,
-    text=True,
-).stdout.strip()
+create_keypair("test-pid")
+program_id = get_address("test-pid")
 print(f"{program_id}")
+
 # Replace the program id in entrypoint.rs
 print("Replacing program id before compilation")
 search_string = "'declare_id!'"
 sed_command = f"sed -i '/{search_string}/c\\declare_id!(\"{program_id}\");' {current_dir}/program/src/lib.rs"
 os.system(sed_command)
 
+# Generate payer keypair
+print("Generating payer keypair")
+create_keypair("payer")
+wallet_address = get_address("payer")
 
 # Generate mint keypairs
 print("Generating mint keypairs...")
-subprocess.run(
-    ["solana-keygen", "new", "--force", "--outfile", f"{current_dir}/mint2022.json"],
-)
-subprocess.run(
-    ["solana-keygen", "new", "--force", "--outfile", f"{current_dir}/mint.json"],
-)
+create_keypair("mint2022")
+create_keypair("mint")
 print("Mint keypairs generated")
 
 # Generate whitelist keypair
 print("Generating whitelist keypair")
-subprocess.run(
-    ["solana-keygen", "new", "--force", "--outfile", f"{current_dir}/whitelist.json"],
-)
+create_keypair("whitelist")
 
 # Start a test validator to retrieve account binaries
 print("Starting validator in the background")
 validator_process = subprocess.Popen(
-    ["solana-test-validator", "--reset"],
+    [
+        "solana-test-validator",
+        "--reset",
+        "--mint",
+        wallet_address,
+    ],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
     text=True,
 )
 
-time.sleep(5)
+time.sleep(2)
 if validator_process.poll() is None:
     print("Solana test validator is running in the background")
 else:
@@ -76,6 +216,8 @@ subprocess.run(
         f"{current_dir}/program/target/deploy/stuk_wl.so",
         "--program-id",
         f"{current_dir}/test-pid.json",
+        "--fee-payer",
+        f"{current_dir}/payer.json",
     ]
 )
 
@@ -85,173 +227,65 @@ subprocess.run(
 subprocess.run(["cargo", "install", "--path", f"{current_dir}/cli"])
 
 # Create spl-token (2022)
-subprocess.run(
-    [
-        "spl-token",
-        "--program-id",
-        TOKEN_2022,
-        "create-token",
-        f"{current_dir}/mint2022.json",
-    ]
-)
-
-result = subprocess.run(
-    ["solana", "address", "-k", f"{current_dir}/mint2022.json"],
-    capture_output=True,
-    text=True,
-)
-mint_address_2022 = result.stdout.strip()
-print(f"Mint address(2022): {mint_address_2022}")
-subprocess.run(
-    [
-        "solana",
-        "account",
-        mint_address_2022,
-        "--output-file",
-        f"{test_path}/mint2022.bin",
-    ]
-)
+accounts["mint_2022"] = create_mint("mint2022", 2022)
+print(f"Mint address(2022): {accounts["mint_2022"]}")
 
 # Create spl-token
-subprocess.run(["spl-token", "create-token", f"{current_dir}/mint.json"])
-result = subprocess.run(
-    ["solana", "address", "-k", f"{current_dir}/mint.json"],
-    capture_output=True,
-    text=True,
-)
-mint_address = result.stdout.strip()
-print(f"Mint address: {mint_address}")
-subprocess.run(
-    ["solana", "account", mint_address, "--output-file", f"{test_path}/mint.bin"]
-)
+accounts["mint"] = create_mint("mint", None)
+print(f"Mint address: {accounts["mint"]}")
 
 # Create token account (2022)
-result = subprocess.run(
-    ["spl-token", "create-account", "--program-id", TOKEN_2022, mint_address_2022],
-    capture_output=True,
-    text=True,
+accounts["wallet_token_account_2022"] = create_token_account(
+    accounts["mint_2022"], wallet_address, 2022
 )
-token_address_2022 = result.stdout.strip().split("\n")[0].split()[2].strip()
-print(f"Wallet token address(2022): {token_address_2022}")
-subprocess.run(
-    [
-        "solana",
-        "account",
-        token_address_2022,
-        "--output-file",
-        f"{test_path}/wallet_token_account2022.bin",
-    ]
-)
+print(f"Wallet token address(2022): {accounts["wallet_token_account_2022"]}")
 
 # Create token account
-token_address = (
-    subprocess.run(
-        ["spl-token", "create-account", mint_address], capture_output=True, text=True
-    )
-    .stdout.strip()
-    .split("\n")[0]
-    .split()[2]
-    .strip()
+accounts["wallet_token_account"] = create_token_account(
+    accounts["mint"], wallet_address, None
 )
-print(f"Wallet token address: {token_address}")
-subprocess.run(
-    [
-        "solana",
-        "account",
-        token_address,
-        "--output-file",
-        f"{test_path}/wallet_token_account.bin",
-    ]
-)
+print(f"Wallet token address: {accounts["wallet_token_account"]}")
 
-wallet_address = subprocess.run(
-    ["solana", "address"], capture_output=True, text=True
-).stdout.strip()
-print(f"Wallet address: {wallet_address}")
 # Create whitelist address for token2022
-whitelist_address_2022 = (
-    subprocess.run(
-        ["stuk-wl", "init", mint_address_2022, wallet_address, "1", "10", "5"],
-        capture_output=True,
-        text=True,
-    )
-    .stdout.strip()
-    .split("\n")[0]
-    .split()[2]
-    .strip()
-)
+accounts["whitelist_2022"] = create_whitelist(accounts["mint_2022"], wallet_address)
+print(f"Whitelist address(2022): {accounts["whitelist_2022"]}")
+accounts["whitelist"] = create_whitelist(accounts["mint"], wallet_address)
+print(f"Whitelist address: {accounts["whitelist"]}")
 
-print(f"Whitelist address(2022): {whitelist_address_2022}")
-subprocess.run(
-    [
-        "solana",
-        "account",
-        whitelist_address_2022,
-        "--output-file",
-        f"{test_path}/whitelist2022.bin",
-    ]
+# Create the vault
+accounts["vault_2022"] = create_token_account(
+    accounts["mint_2022"], accounts["whitelist_2022"], 2022
 )
+print(f"Vault address(2022): {accounts["vault_2022"]}")
 
-# Create whitelist address
-whitelist_address = (
-    subprocess.run(
-        ["stuk-wl", "init", mint_address, wallet_address, "1", "10", "5"],
-        capture_output=True,
-        text=True,
-    )
-    .stdout.strip()
-    .split("\n")[0]
-    .split()[2]
-    .strip()
-)
+accounts["vault"] = create_token_account(accounts["mint"], accounts["whitelist"], None)
+print(f"Vault address: {accounts["vault"]}")
 
-print(f"Whitelist address: {whitelist_address}")
-subprocess.run(
-    [
-        "solana",
-        "account",
-        whitelist_address,
-        "--output-file",
-        f"{test_path}/whitelist.bin",
-    ]
-)
 # Enable registration
-subprocess.run(["stuk-wl", "allow-register", mint_address_2022, "true"])
-subprocess.run(["stuk-wl", "allow-register", mint_address, "true"])
-
-# Create ticket address (2022)
-ticket_address_2022 = (
-    subprocess.run(
-        ["stuk-wl", "register", mint_address_2022], capture_output=True, text=True
-    )
-    .stdout.strip()
-    .split()[1]
-    .strip()
-)
-print(f"Ticket address(2022): {ticket_address_2022}")
-subprocess.run(
-    [
-        "solana",
-        "account",
-        ticket_address_2022,
-        "--output-file",
-        f"{test_path}/ticket2022.bin",
-    ]
-)
+allow_registration(accounts["mint_2022"])
+allow_registration(accounts["mint"])
 
 # Create ticket address
-ticket_address = (
-    subprocess.run(
-        ["stuk-wl", "register", mint_address], capture_output=True, text=True
-    )
-    .stdout.strip()
-    .split()[1]
-    .strip()
+accounts["ticket_account_2022"] = create_ticket(accounts["mint_2022"])
+print(f"Ticket address(2022): {accounts["ticket_account_2022"]}")
+
+accounts["ticket_account"] = create_ticket(accounts["mint"])
+print(f"Ticket address: {accounts["ticket_account"]}")
+
+# Create ticket token accounts
+accounts["ticket_token_account_2022"] = create_token_account(
+    accounts["mint_2022"], accounts["ticket_account_2022"], 2022
 )
-print(f"Ticket address: {ticket_address}")
-subprocess.run(
-    ["solana", "account", ticket_address, "--output-file", f"{test_path}/ticket.bin"]
+print(f"Ticket token account address(2022): {accounts["ticket_token_account_2022"]}")
+
+accounts["ticket_token_account"] = create_token_account(
+    accounts["mint"], accounts["ticket_account"], None
 )
+print(f"Ticket token account address: {accounts["ticket_token_account"]}")
+
+for account in accounts:
+    generate_account_binary(account, accounts[account])
+# Get account binaries
 
 # Clean up keypairs
 print("Cleaning up keypairs...")
@@ -259,6 +293,7 @@ os.remove(f"{current_dir}/mint.json")
 os.remove(f"{current_dir}/mint2022.json")
 os.remove(f"{current_dir}/test-pid.json")
 os.remove(f"{current_dir}/whitelist.json")
+os.remove(f"{current_dir}/payer.json")
 print("Keypairs removed")
 
 print("Stopping solana-test-validator")
