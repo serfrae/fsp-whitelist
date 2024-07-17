@@ -16,7 +16,7 @@ accounts: dict[str, str] = {}
 
 
 # For auto-enter
-def create_keypair(keypair: str):
+def create_keypair(keypair: str) -> None:
     print(f"Generating {keypair} keypair...")
     subprocess.Popen(
         [
@@ -212,7 +212,7 @@ def generate_account_binary(bin_name: str, account: str) -> None:
         "account",
         account,
         "--output-file",
-        f"{test_path}/{account}.bin",
+        f"{test_path}/{bin_name}.bin",
     ]
     subprocess.run(command)
 
@@ -316,3 +316,17 @@ print("Keypairs removed")
 
 print("Stopping solana-test-validator")
 subprocess.run(["pkill", "-f", "-9", "solana-test-validator"])
+
+print("Starting tests...")
+subprocess.run(
+    ["cargo", "test", "--manifest-path", f"{current_dir}/program/Cargo.toml"]
+)
+print("Cargo tests complete")
+
+validator_tests = input("Would you like to run local validator tests?[Y/n]:")
+if validator_tests == "Y" or "y" or "yes":
+    print("Starting validator tests...")
+    #validator_testing
+else:
+    print("Testing completed")
+    exit(0)

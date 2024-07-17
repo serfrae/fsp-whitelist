@@ -7,7 +7,7 @@ pub mod state;
 use solana_program::{declare_id, pubkey::Pubkey};
 
 const SEED: &[u8; 12] = b"___whitelist";
-declare_id!("Hr6hrURQ2uFzzm8HGtWWW4MKxDD4X5WpDhDLX47s1xRb");
+declare_id!("3jyFQazJomtErMzsHrhNzj18aTJYiq3Xdr3H9J51CUzp");
 pub fn get_whitelist_address(mint: &Pubkey) -> (Pubkey, u8) {
 	Pubkey::find_program_address(&[SEED, mint.as_ref()], &crate::id())
 }

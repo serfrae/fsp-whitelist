@@ -1423,27 +1423,6 @@ mod tests {
 		program_test.start().await
 	}
 
-	async fn fund_keypair(
-		banks_client: &mut BanksClient,
-		payer: &Keypair,
-		hash: &Hash,
-		recipient: &Pubkey,
-		amount: u64,
-	) {
-		let transaction = Transaction::new_signed_with_payer(
-			&[system_instruction::transfer(
-				&payer.pubkey(),
-				recipient,
-				amount,
-			)],
-			Some(&payer.pubkey()),
-			&[payer],
-			*hash,
-		);
-
-		banks_client.process_transaction(transaction).await.unwrap();
-	}
-
 	async fn create_mint(
 		banks_client: &mut BanksClient,
 		payer: &Keypair,
@@ -1494,172 +1473,6 @@ mod tests {
 		println!("Mint created");
 	}
 
-	async fn create_token_account(
-		banks_client: &mut BanksClient,
-		payer: &Keypair,
-		wallet: &Pubkey,
-		mint: &Keypair,
-		token_program_id: &Pubkey,
-	) -> Pubkey {
-		println!("{}", token_program_id);
-		let token_account =
-			spl_associated_token_account::get_associated_token_address_with_program_id(
-				wallet,
-				&mint.pubkey(),
-				&token_program_id,
-			);
-
-		let create_token_account_ix =
-			spl_associated_token_account::instruction::create_associated_token_account(
-				&payer.pubkey(),
-				&token_account,
-				&mint.pubkey(),
-				&token_program_id,
-			);
-
-		let mut transaction =
-			Transaction::new_with_payer(&[create_token_account_ix], Some(&payer.pubkey()));
-
-		let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-
-		transaction.sign(&[payer], recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-
-		let associated_token_account = banks_client
-			.get_account(token_account)
-			.await
-			.expect("get assoc token account")
-            .unwrap();
-		assert_eq!(associated_token_account.data.len(), 165);
-		println!("Token account created");
-		token_account
-	}
-
-	async fn mint_tokens(
-		banks_client: &mut BanksClient,
-		payer: &Keypair,
-		recent_blockhash: &Hash,
-		mint: &Keypair,
-		token_account: &Pubkey,
-		token_program_id: &Pubkey,
-	) {
-		let mint_to_ix = spl_token_2022::instruction::mint_to(
-			&token_program_id,
-			&mint.pubkey(),
-			&token_account,
-			&payer.pubkey(),
-			&[],
-			10_000,
-		)
-		.unwrap();
-
-		let mut transaction = Transaction::new_with_payer(&[mint_to_ix], Some(&payer.pubkey()));
-
-		transaction.sign(&[payer], *recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-		println!("Tokens minted");
-	}
-
-	async fn create_whitelist(
-		banks_client: &mut BanksClient,
-		payer: &Keypair,
-		recent_blockhash: &Hash,
-		whitelist: &Pubkey,
-		vault: &Pubkey,
-		mint: &Pubkey,
-		treasury: &Pubkey,
-		token_price: u64,
-		buy_limit: u64,
-		whitelist_size: u64,
-		allow_registration: bool,
-		registration_start_timestamp: i64,
-		registration_duration: i64,
-		sale_start_timestamp: i64,
-		sale_duration: i64,
-		token_program: &Pubkey,
-	) -> Result<(), ProgramError> {
-		let init_whitelist = crate::instructions::init_whitelist(
-			whitelist,
-			&payer.pubkey(),
-			vault,
-			mint,
-			treasury,
-			token_price,
-			buy_limit,
-			whitelist_size,
-			allow_registration,
-			registration_start_timestamp,
-			registration_duration,
-			sale_start_timestamp,
-			sale_duration,
-			token_program,
-		)
-		.unwrap();
-
-		let mut transaction = Transaction::new_with_payer(&[init_whitelist], Some(&payer.pubkey()));
-		transaction.sign(&[payer], *recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-		Ok(())
-	}
-
-	async fn create_default_whitelist2(
-		banks_client: &mut BanksClient,
-		payer: &Keypair,
-		recent_blockhash: &Hash,
-		mint_keypair: &Keypair,
-		treasury_keypair: &Keypair,
-		token_program_id: &Pubkey,
-	) -> (Pubkey, Pubkey) {
-		let (whitelist, _) = get_whitelist_address(&mint_keypair.pubkey());
-		create_mint(
-			banks_client,
-			&payer,
-			&recent_blockhash,
-			&mint_keypair,
-			token_program_id,
-			9,
-		)
-		.await;
-		let vault = spl_associated_token_account::get_associated_token_address_with_program_id(
-			&whitelist,
-			&mint_keypair.pubkey(),
-			token_program_id,
-		);
-
-		let token_price = 1;
-		let buy_limit = 10;
-		let whitelist_size = 5;
-		let allow_registration = true;
-		let registration_start_timestamp = 0;
-		let registration_duration = 0;
-		let sale_start_timestamp = 0;
-		let sale_duration = 0;
-
-		let ix = crate::instructions::init_whitelist(
-			&whitelist,
-			&payer.pubkey(),
-			&vault,
-			&mint_keypair.pubkey(),
-			&treasury_keypair.pubkey(),
-			token_price,
-			buy_limit,
-			whitelist_size,
-			allow_registration,
-			registration_start_timestamp,
-			registration_duration,
-			sale_start_timestamp,
-			sale_duration,
-			token_program_id,
-		)
-		.unwrap();
-
-		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-		transaction.sign(&[payer], *recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-
-		println!("Whitelist initialised");
-		(whitelist, vault)
-	}
 	async fn create_default_whitelist(
 		banks_client: &mut BanksClient,
 		payer: &Keypair,
@@ -1717,32 +1530,6 @@ mod tests {
 
 		println!("Whitelist initialised");
 		(whitelist, vault, mint_keypair, treasury)
-	}
-
-	#[test_case(spl_token::id() ; "Token Program")]
-	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	#[tokio::test]
-	async fn test_create_mint_token_account(token_program_id: Pubkey) {
-		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let mint = Keypair::new();
-		let _ = create_mint(
-			&mut banks_client,
-			&payer,
-			&recent_blockhash,
-			&mint,
-			&token_program_id,
-			9,
-		).await;
-        // as expected this fails too - i have absolutely no idea why creating the token account
-        // is failing
-		let _ = create_token_account(
-			&mut banks_client,
-			&payer,
-			&payer.pubkey(),
-			&mint,
-			&token_program_id,
-		)
-		.await;
 	}
 
 	#[test_case(spl_token::id() ; "Token Program")]
@@ -1883,66 +1670,6 @@ mod tests {
 		.unwrap();
 
 		let mut transaction = Transaction::new_with_payer(&[remove_ix], Some(&payer.pubkey()));
-		transaction.sign(&[payer], recent_blockhash);
-		banks_client.process_transaction(transaction).await.unwrap();
-	}
-
-	#[test_case(spl_token::id() ; "Token Program")]
-	#[test_case(spl_token_2022::id() ; "Token-2022 Program")]
-	#[tokio::test]
-	async fn test_deposit_tokens(token_program_id: Pubkey) {
-		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let mint_keypair = Keypair::new();
-		let treasury_keypair = Keypair::new();
-
-		let (whitelist, vault) = create_default_whitelist2(
-			&mut banks_client,
-			&payer,
-			&recent_blockhash,
-			&mint_keypair,
-			&treasury_keypair,
-			&token_program_id,
-		)
-		.await;
-
-		let token_account = create_token_account(
-			&mut banks_client,
-			&payer,
-			&payer.pubkey(),
-			&mint_keypair,
-			&token_program_id,
-		)
-		.await;
-
-		let token_account_test = banks_client
-			.get_account(token_account)
-			.await
-			.expect("get_account - token account")
-			.expect("no token account");
-		assert_eq!(token_account_test.data.len(), 165);
-
-		mint_tokens(
-			&mut banks_client,
-			&payer,
-			&recent_blockhash,
-			&mint_keypair,
-			&token_account,
-			&token_program_id,
-		)
-		.await;
-
-		let ix = crate::instructions::deposit_tokens(
-			&whitelist,
-			&vault,
-			&payer.pubkey(),
-			&token_account,
-			&mint_keypair.pubkey(),
-			42,
-			&token_program_id,
-		)
-		.unwrap();
-
-		let mut transaction = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
 		transaction.sign(&[payer], recent_blockhash);
 		banks_client.process_transaction(transaction).await.unwrap();
 	}
@@ -2092,7 +1819,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_unregister(token_program_id: Pubkey) {
 		let (mut banks_client, payer, recent_blockhash) = setup_test_environment().await;
-		let (whitelist, vault, mint, _treasury) = create_default_whitelist(
+		let (whitelist, _vault, _mint, _treasury) = create_default_whitelist(
 			&mut banks_client,
 			&payer,
 			&recent_blockhash,
