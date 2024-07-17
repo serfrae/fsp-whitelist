@@ -13,6 +13,7 @@ use {
 	base64::{engine::general_purpose::STANDARD, Engine},
 	bincode::serialize,
 	clap::{command, Parser},
+	indicatif::{ProgressBar, ProgressStyle},
 	serde::{Deserialize, Serialize},
 	serde_json::{json, Value},
 	solana_client::rpc_client::RpcClient,
@@ -22,15 +23,26 @@ use {
 	},
 	std::str::FromStr,
 	std::sync::Arc,
+	std::time::Instant,
 	stuk_wl::instructions,
-	tokio::{sync::Mutex, net::TcpListener, time::{sleep, Duration}},
+	tokio::{
+		net::TcpListener,
+		sync::mpsc,
+		time::{sleep, Duration},
+	},
 	tower_http::cors::{Any, CorsLayer},
-    spinners::{Spinner, Spinners},
 };
+
+#[derive(Debug)]
+enum ControlMessage {
+	Start,
+	Stop,
+}
 
 struct AppState {
 	mint: Pubkey,
 	rpc_client: RpcClient,
+	control_tx: mpsc::Sender<ControlMessage>,
 }
 
 #[derive(Parser, Debug)]
@@ -55,6 +67,7 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
 	let args = Cli::parse();
+	let (control_tx, control_rx) = mpsc::channel(32);
 
 	let mint = args.mint;
 	let solana_config_file = match args.config {
@@ -81,7 +94,16 @@ async fn main() -> Result<()> {
 
 	let rpc_client = RpcClient::new_with_commitment(url, CommitmentConfig::confirmed());
 	let port = args.port.unwrap_or(8080);
-	let state = Arc::new(AppState { mint, rpc_client });
+	let state = Arc::new(AppState {
+		mint,
+		rpc_client,
+		control_tx,
+	});
+
+	tokio::spawn(async move {
+		run_spinner(control_rx).await;
+	});
+	state.control_tx.send(ControlMessage::Start).await.unwrap();
 
 	let cors = CorsLayer::new()
 		.allow_methods([Method::GET, Method::POST, Method::OPTIONS])
@@ -102,28 +124,55 @@ async fn main() -> Result<()> {
 		.layer(cors)
 		.with_state(state);
 
-
 	let addr = format!("0.0.0.0:{}", port);
 	let listener = TcpListener::bind(&addr).await.unwrap();
-
-    let spinner = Arc::new(Mutex::new(None));
-    let spinner_clone = Arc::clone(&spinner);
-    tokio::spawn(async move {
-        run_spinner(spinner_clone).await;
-    });
-
 	axum::serve(listener, app)
 		.await
 		.map_err(|e| anyhow!("Could not start webserver: {}", e))
 }
 
-async fn run_spinner(spinner: Arc<Mutex<Option<Spinner>>>) {
-    let spinner_instance = Spinner::new(Spinners::Dots12, "Running axum server...".into());
-    let mut guard = spinner.lock().await;
-    *guard = Some(spinner_instance);
-    loop {
-        sleep(Duration::from_secs(1)).await;
-    }
+async fn run_spinner(mut control_rx: mpsc::Receiver<ControlMessage>) {
+	let start_time = Instant::now();
+	let mut spinner: Option<ProgressBar> = None;
+
+	loop {
+		tokio::select! {
+			Some(message) = control_rx.recv() => {
+				match message {
+					ControlMessage::Stop => {
+						if let Some(spinner) = spinner.take() {
+							spinner.finish_with_message("Stopped ✔");
+						}
+					}
+					ControlMessage::Start => {
+						if spinner.is_none() {
+							let new_spinner = ProgressBar::new_spinner();
+							new_spinner.set_style(
+								ProgressStyle::default_spinner()
+									.template("{spinner:.green} {msg}")
+									.unwrap()
+									.tick_strings(&[
+										"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
+									]));
+							new_spinner.enable_steady_tick(Duration::from_millis(80));
+							new_spinner.set_message("Server running...");
+							spinner = Some(new_spinner);
+						}
+					}
+				}
+			}
+			_ = sleep(Duration::from_secs(1)) => {
+				if let Some(spinner) = spinner.as_mut() {
+					let elapsed = start_time.elapsed();
+					let secs = elapsed.as_secs();
+					let mins = secs / 60;
+					let hrs = mins / 60;
+					let time_string = format!("Server running... | {}:{:02}:{:02}", hrs, mins % 60, secs % 60);
+					spinner.set_message(time_string);
+				}
+			}
+		}
+	}
 }
 
 async fn get_request_actions_json() -> impl IntoResponse {

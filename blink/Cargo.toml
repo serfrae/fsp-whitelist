@@ -18,7 +18,7 @@ anyhow = "1.0.86"
 clap = { version = "4.5.9", features = ["cargo", "derive"] }
 solana-cli-config = "2.0.2"
 spl-associated-token-account = "4.0.0"
-spinners = "4.1.1"
+indicatif = "0.17.8"
 
 [[bin]]
 name = "wl-blink"
