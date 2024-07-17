@@ -131,50 +131,6 @@ async fn main() -> Result<()> {
 		.map_err(|e| anyhow!("Could not start webserver: {}", e))
 }
 
-async fn run_spinner(mut control_rx: mpsc::Receiver<ControlMessage>) {
-	let start_time = Instant::now();
-	let mut spinner: Option<ProgressBar> = None;
-
-	loop {
-		tokio::select! {
-			Some(message) = control_rx.recv() => {
-				match message {
-					ControlMessage::Stop => {
-						if let Some(spinner) = spinner.take() {
-							spinner.finish_with_message("Stopped ✔");
-						}
-					}
-					ControlMessage::Start => {
-						if spinner.is_none() {
-							let new_spinner = ProgressBar::new_spinner();
-							new_spinner.set_style(
-								ProgressStyle::default_spinner()
-									.template("{spinner:.green} {msg}")
-									.unwrap()
-									.tick_strings(&[
-										"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
-									]));
-							new_spinner.enable_steady_tick(Duration::from_millis(80));
-							new_spinner.set_message("Server running...");
-							spinner = Some(new_spinner);
-						}
-					}
-				}
-			}
-			_ = sleep(Duration::from_secs(1)) => {
-				if let Some(spinner) = spinner.as_mut() {
-					let elapsed = start_time.elapsed();
-					let secs = elapsed.as_secs();
-					let mins = secs / 60;
-					let hrs = mins / 60;
-					let time_string = format!("Server running... | {}:{:02}:{:02}", hrs, mins % 60, secs % 60);
-					spinner.set_message(time_string);
-				}
-			}
-		}
-	}
-}
-
 async fn get_request_actions_json() -> impl IntoResponse {
 	Json(json!({
 		"rules": [
@@ -406,4 +362,48 @@ async fn reg_post_request_handler(
 		transaction: STANDARD.encode(serialized_transaction),
 		message: format!("Send {} SOL to {}", params.amount, to_pubkey),
 	}))
+}
+
+async fn run_spinner(mut control_rx: mpsc::Receiver<ControlMessage>) {
+	let start_time = Instant::now();
+	let mut spinner: Option<ProgressBar> = None;
+
+	loop {
+		tokio::select! {
+			Some(message) = control_rx.recv() => {
+				match message {
+					ControlMessage::Stop => {
+						if let Some(spinner) = spinner.take() {
+							spinner.finish_with_message("Stopped ✔");
+						}
+					}
+					ControlMessage::Start => {
+						if spinner.is_none() {
+							let new_spinner = ProgressBar::new_spinner();
+							new_spinner.set_style(
+								ProgressStyle::default_spinner()
+									.template("{spinner:.green} {msg}")
+									.unwrap()
+									.tick_strings(&[
+										"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
+									]));
+							new_spinner.enable_steady_tick(Duration::from_millis(80));
+							new_spinner.set_message("Server running...");
+							spinner = Some(new_spinner);
+						}
+					}
+				}
+			}
+			_ = sleep(Duration::from_secs(1)) => {
+				if let Some(spinner) = spinner.as_mut() {
+					let elapsed = start_time.elapsed();
+					let secs = elapsed.as_secs();
+					let mins = secs / 60;
+					let hrs = mins / 60;
+					let time_string = format!("Server running... | {}:{:02}:{:02}", hrs, mins % 60, secs % 60);
+					spinner.set_message(time_string);
+				}
+			}
+		}
+	}
 }
