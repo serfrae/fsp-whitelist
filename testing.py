@@ -1,5 +1,6 @@
 import os
 import subprocess
+import textwrap
 import time
 
 TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
@@ -16,6 +17,7 @@ accounts: dict[str, str] = {}
 
 # For auto-enter
 def create_keypair(keypair: str):
+    print(f"Generating {keypair} keypair...")
     subprocess.Popen(
         [
             "solana-keygen",
@@ -27,6 +29,33 @@ def create_keypair(keypair: str):
         ],
         stdout=subprocess.DEVNULL,
     )
+    print(f"{keypair} keypair generated")
+
+
+def start_validator() -> None:
+    print("Starting validator in the background...")
+    validator_process = subprocess.Popen(
+        [
+            "solana-test-validator",
+            "--reset",
+            "--mint",
+            wallet_address,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+    time.sleep(2)
+    if validator_process.poll() is None:
+        print("Solana test validator is running in the background")
+    else:
+        stdout, stderr = validator_process.communicate()
+        print("Failed to start Solana test validator")
+        print(f"STDOUT: {stdout}")
+        print(f"STDERR: {stderr}")
+        exit(1)
+    print("Validator running")
 
 
 def get_address(keypair: str) -> str:
@@ -54,13 +83,15 @@ def create_mint(keypair: str, token_program: int | None) -> str:
     else:
         command[3] = TOKEN
 
-    return (
+    mint = (
         subprocess.run(command, capture_output=True, text=True)
         .stdout.strip()
         .split("\n")[0]
         .split()[2]
         .strip()
     )
+    print(f"{keypair} address: {mint}")
+    return mint
 
 
 def create_token_account(
@@ -83,13 +114,25 @@ def create_token_account(
     else:
         command[3] = TOKEN
 
-    return (
+    token_account = (
         subprocess.run(command, capture_output=True, text=True)
         .stdout.strip()
         .split("\n")[0]
         .split()[2]
         .strip()
     )
+
+    output_string = textwrap.dedent(
+        f"""
+    Token account for: {mint_address}
+    With owner: {owner_address} 
+    Using token program: {token_program} 
+    Generated with address: {token_account}"""
+    )
+
+    print(output_string)
+
+    return token_account
 
 
 def create_ticket(mint_address: str) -> str:
@@ -100,12 +143,23 @@ def create_ticket(mint_address: str) -> str:
         "register",
         mint_address,
     ]
-    return (
+    ticket_address = (
         subprocess.run(command, capture_output=True, text=True)
         .stdout.strip()
         .split()[1]
         .strip()
     )
+
+    output_string = textwrap.dedent(
+        f"""
+    Ticket for: {wallet_address}, 
+    For whitelist initialised with mint: {mint_address} 
+    Generated with address: {ticket_address}"""
+    )
+
+    print(output_string)
+
+    return ticket_address
 
 
 def create_whitelist(mint_address: str, wallet_address: str) -> str:
@@ -120,13 +174,24 @@ def create_whitelist(mint_address: str, wallet_address: str) -> str:
         "10",
         "5",
     ]
-    return (
+    whitelist = (
         subprocess.run(command, capture_output=True, text=True)
         .stdout.strip()
         .split("\n")[0]
         .split()[2]
         .strip()
     )
+
+    output_string = textwrap.dedent(
+        f"""
+    Whitelist address for token: {mint_address},
+    With owner: {wallet_address},
+    Generated with address: {whitelist}"""
+    )
+
+    print(output_string)
+
+    return whitelist
 
 
 def allow_registration(mint_address: str) -> None:
@@ -153,10 +218,8 @@ def generate_account_binary(bin_name: str, account: str) -> None:
 
 
 # Generate program id keypair
-print("Generating program id keypair...")
 create_keypair("test-pid")
 program_id = get_address("test-pid")
-print(f"{program_id}")
 
 # Replace the program id in entrypoint.rs
 print("Replacing program id before compilation")
@@ -165,44 +228,18 @@ sed_command = f"sed -i '/{search_string}/c\\declare_id!(\"{program_id}\");' {cur
 os.system(sed_command)
 
 # Generate payer keypair
-print("Generating payer keypair")
 create_keypair("payer")
 wallet_address = get_address("payer")
 
 # Generate mint keypairs
-print("Generating mint keypairs...")
 create_keypair("mint_2022")
 create_keypair("mint")
-print("Mint keypairs generated")
 
 # Generate whitelist keypair
-print("Generating whitelist keypair")
 create_keypair("whitelist")
 
 # Start a test validator to retrieve account binaries
-print("Starting validator in the background")
-validator_process = subprocess.Popen(
-    [
-        "solana-test-validator",
-        "--reset",
-        "--mint",
-        wallet_address,
-    ],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL,
-    text=True,
-)
-
-time.sleep(2)
-if validator_process.poll() is None:
-    print("Solana test validator is running in the background")
-else:
-    stdout, stderr = validator_process.communicate()
-    print("Failed to start Solana test validator")
-    print(f"STDOUT: {stdout}")
-    print(f"STDERR: {stderr}")
-    exit(1)
-print("Validator running")
+start_validator()
 
 # Compile and deploy the whitelist program
 subprocess.run(
@@ -228,38 +265,25 @@ subprocess.run(["cargo", "install", "--path", f"{current_dir}/cli"])
 
 # Create spl-token (2022)
 accounts["mint_2022"] = create_mint("mint_2022", 2022)
-print(f"Mint address(2022): {accounts["mint_2022"]}")
-
-# Create spl-token
 accounts["mint"] = create_mint("mint", None)
-print(f"Mint address: {accounts["mint"]}")
 
 # Create token account (2022)
 accounts["wallet_token_account_2022"] = create_token_account(
     accounts["mint_2022"], wallet_address, 2022
 )
-print(f"Wallet token address(2022): {accounts["wallet_token_account_2022"]}")
-
-# Create token account
 accounts["wallet_token_account"] = create_token_account(
     accounts["mint"], wallet_address, None
 )
-print(f"Wallet token address: {accounts["wallet_token_account"]}")
 
 # Create whitelist address for token2022
 accounts["whitelist_2022"] = create_whitelist(accounts["mint_2022"], wallet_address)
-print(f"Whitelist address(2022): {accounts["whitelist_2022"]}")
 accounts["whitelist"] = create_whitelist(accounts["mint"], wallet_address)
-print(f"Whitelist address: {accounts["whitelist"]}")
 
 # Create the vault
 accounts["vault_2022"] = create_token_account(
     accounts["mint_2022"], accounts["whitelist_2022"], 2022
 )
-print(f"Vault address(2022): {accounts["vault_2022"]}")
-
 accounts["vault"] = create_token_account(accounts["mint"], accounts["whitelist"], None)
-print(f"Vault address: {accounts["vault"]}")
 
 # Enable registration
 allow_registration(accounts["mint_2022"])
@@ -267,21 +291,15 @@ allow_registration(accounts["mint"])
 
 # Create ticket address
 accounts["ticket_account_2022"] = create_ticket(accounts["mint_2022"])
-print(f"Ticket address(2022): {accounts["ticket_account_2022"]}")
-
 accounts["ticket_account"] = create_ticket(accounts["mint"])
-print(f"Ticket address: {accounts["ticket_account"]}")
 
 # Create ticket token accounts
 accounts["ticket_token_account_2022"] = create_token_account(
     accounts["mint_2022"], accounts["ticket_account_2022"], 2022
 )
-print(f"Ticket token account address(2022): {accounts["ticket_token_account_2022"]}")
-
 accounts["ticket_token_account"] = create_token_account(
     accounts["mint"], accounts["ticket_account"], None
 )
-print(f"Ticket token account address: {accounts["ticket_token_account"]}")
 
 for account in accounts:
     generate_account_binary(account, accounts[account])
