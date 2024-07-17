@@ -15,6 +15,19 @@ print(f"Target for account binaries: {test_path}")
 accounts: dict[str, str] = {}
 
 
+def install_program(name: str) -> None:
+    subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--manifest-path",
+            f"{current_dir}/{name}/Cargo.toml",
+        ]
+    )
+    subprocess.run(["cargo", "install", "--path", f"{current_dir}/{name}"])
+
+
 # For auto-enter
 def create_keypair(keypair: str) -> None:
     print(f"Generating {keypair} keypair...")
@@ -261,7 +274,9 @@ subprocess.run(
 subprocess.run(
     ["cargo", "build", "--release", "--manifest-path", f"{current_dir}/cli/Cargo.toml"]
 )
-subprocess.run(["cargo", "install", "--path", f"{current_dir}/cli"])
+
+# Compile and install the blink, cause why not?
+install_program("blink")
 
 # Create spl-token (2022)
 accounts["mint_2022"] = create_mint("mint_2022", 2022)
@@ -326,7 +341,7 @@ print("Cargo tests complete")
 validator_tests = input("Would you like to run local validator tests?[Y/n]:")
 if validator_tests == "Y" or "y" or "yes":
     print("Starting validator tests...")
-    #validator_testing
+    # validator_testing
 else:
     print("Testing completed")
     exit(0)
