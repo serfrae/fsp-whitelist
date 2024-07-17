@@ -12,7 +12,7 @@ use {
 	},
 	base64::{engine::general_purpose::STANDARD, Engine},
 	bincode::serialize,
-	clap::Parser,
+	clap::{command, Parser},
 	serde::{Deserialize, Serialize},
 	serde_json::{json, Value},
 	solana_client::rpc_client::RpcClient,
@@ -33,10 +33,22 @@ struct AppState {
 }
 
 #[derive(Parser, Debug)]
+#[command(
+	name = "Superteam UK Whitelist Blink",
+	about = "A solana action/blink for the Superteam UK Whitelist-Gated Token Sale"
+)]
 struct Cli {
+	/// Address of the token for sale
 	mint: Pubkey,
+	/// RPC url values: t/testnet, d/devnet, m/mainnet, l/local, or a custom RPC
+	#[arg(short, long)]
 	url: Option<String>,
+	/// Path to a solana config file - must be a full path
+	#[arg(short, long)]
 	config: Option<String>,
+	/// The exposed port, default: :8080
+	#[arg(short, long)]
+	port: Option<u16>,
 }
 
 #[tokio::main]
@@ -67,7 +79,7 @@ async fn main() -> Result<()> {
 	};
 
 	let rpc_client = RpcClient::new_with_commitment(url, CommitmentConfig::confirmed());
-
+	let port = args.port.unwrap_or(8080);
 	let state = Arc::new(AppState { mint, rpc_client });
 
 	let cors = CorsLayer::new()
@@ -89,7 +101,8 @@ async fn main() -> Result<()> {
 		.layer(cors)
 		.with_state(state);
 
-	let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+	let addr = format!("0.0.0.0:{}", port);
+	let listener = TcpListener::bind(&addr).await.unwrap();
 	axum::serve(listener, app)
 		.await
 		.map_err(|e| anyhow!("Could not start webserver: {}", e))
