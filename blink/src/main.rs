@@ -23,8 +23,9 @@ use {
 	std::str::FromStr,
 	std::sync::Arc,
 	stuk_wl::instructions,
-	tokio::net::TcpListener,
+	tokio::{sync::Mutex, net::TcpListener, time::{sleep, Duration}},
 	tower_http::cors::{Any, CorsLayer},
+    spinners::{Spinner, Spinners},
 };
 
 struct AppState {
@@ -101,11 +102,28 @@ async fn main() -> Result<()> {
 		.layer(cors)
 		.with_state(state);
 
+
 	let addr = format!("0.0.0.0:{}", port);
 	let listener = TcpListener::bind(&addr).await.unwrap();
+
+    let spinner = Arc::new(Mutex::new(None));
+    let spinner_clone = Arc::clone(&spinner);
+    tokio::spawn(async move {
+        run_spinner(spinner_clone).await;
+    });
+
 	axum::serve(listener, app)
 		.await
 		.map_err(|e| anyhow!("Could not start webserver: {}", e))
+}
+
+async fn run_spinner(spinner: Arc<Mutex<Option<Spinner>>>) {
+    let spinner_instance = Spinner::new(Spinners::Dots12, "Running axum server...".into());
+    let mut guard = spinner.lock().await;
+    *guard = Some(spinner_instance);
+    loop {
+        sleep(Duration::from_secs(1)).await;
+    }
 }
 
 async fn get_request_actions_json() -> impl IntoResponse {

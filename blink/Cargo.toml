@@ -12,12 +12,13 @@ serde = "1.0.204"
 serde_json = "1.0.120"
 solana-client = "2.0.2"
 solana-sdk = "2.0.2"
-tokio = { version = "1.38.0", features = ["macros"] }
+tokio = { version = "1.38.0", features = ["full"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 anyhow = "1.0.86"
 clap = { version = "4.5.9", features = ["cargo", "derive"] }
 solana-cli-config = "2.0.2"
 spl-associated-token-account = "4.0.0"
+spinners = "4.1.1"
 
 [[bin]]
 name = "wl-blink"
