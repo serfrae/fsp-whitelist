@@ -324,7 +324,6 @@ for account in accounts:
 print("Cleaning up keypairs...")
 os.remove(f"{current_dir}/mint.json")
 os.remove(f"{current_dir}/mint_2022.json")
-os.remove(f"{current_dir}/test-pid.json")
 os.remove(f"{current_dir}/whitelist.json")
 os.remove(f"{current_dir}/payer.json")
 print("Keypairs removed")
