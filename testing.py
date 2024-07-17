@@ -171,7 +171,7 @@ wallet_address = get_address("payer")
 
 # Generate mint keypairs
 print("Generating mint keypairs...")
-create_keypair("mint2022")
+create_keypair("mint_2022")
 create_keypair("mint")
 print("Mint keypairs generated")
 
@@ -227,7 +227,7 @@ subprocess.run(
 subprocess.run(["cargo", "install", "--path", f"{current_dir}/cli"])
 
 # Create spl-token (2022)
-accounts["mint_2022"] = create_mint("mint2022", 2022)
+accounts["mint_2022"] = create_mint("mint_2022", 2022)
 print(f"Mint address(2022): {accounts["mint_2022"]}")
 
 # Create spl-token
@@ -290,7 +290,7 @@ for account in accounts:
 # Clean up keypairs
 print("Cleaning up keypairs...")
 os.remove(f"{current_dir}/mint.json")
-os.remove(f"{current_dir}/mint2022.json")
+os.remove(f"{current_dir}/mint_2022.json")
 os.remove(f"{current_dir}/test-pid.json")
 os.remove(f"{current_dir}/whitelist.json")
 os.remove(f"{current_dir}/payer.json")
