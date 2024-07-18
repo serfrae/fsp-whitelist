@@ -89,7 +89,6 @@ impl AppState {
 }
 
 pub struct Server {
-	state: Arc<AppState>,
 	app: Router,
 	listener: TcpListener,
 	monitor: Monitor,
@@ -124,7 +123,7 @@ impl Server {
 				post(Self::reg_post_request_handler),
 			)
 			.layer(cors)
-			.with_state(state.clone());
+			.with_state(state);
 
 		let monitor = Monitor::new(counter_rx);
 
@@ -132,7 +131,6 @@ impl Server {
 		let listener = TcpListener::bind(&addr).await.unwrap();
 
 		Server {
-			state,
 			app,
 			listener,
 			monitor,
