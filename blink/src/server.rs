@@ -1,5 +1,5 @@
 use {
-	crate::monitor::*,
+	crate::monitor::{Monitor, CounterMessage},
 	anyhow::{anyhow, Result},
 	axum::{
 		extract::{Json, Query, State},
@@ -70,7 +70,6 @@ struct PostResponse {
 struct AppState {
 	mint: Pubkey,
 	rpc_client: RpcClient,
-	control_tx: mpsc::Sender<ControlMessage>,
 	counter_tx: mpsc::Sender<CounterMessage>,
 }
 
@@ -78,14 +77,12 @@ impl AppState {
 	pub fn new(
 		mint: Pubkey,
 		url: String,
-		control_tx: mpsc::Sender<ControlMessage>,
 		counter_tx: mpsc::Sender<CounterMessage>,
 	) -> Self {
 		let rpc_client = RpcClient::new_with_commitment(url, CommitmentConfig::confirmed());
 		AppState {
 			mint,
 			rpc_client,
-			control_tx,
 			counter_tx,
 		}
 	}
@@ -100,7 +97,6 @@ pub struct Server {
 
 impl Server {
 	pub async fn new(mint: Pubkey, url: String, port: u16) -> Self {
-		let (control_tx, control_rx) = mpsc::channel(32);
 		let (counter_tx, counter_rx) = mpsc::channel(1024);
 
 		let cors = CorsLayer::new()
@@ -113,7 +109,7 @@ impl Server {
 			])
 			.allow_origin(Any);
 
-		let state = Arc::new(AppState::new(mint, url, control_tx, counter_tx));
+		let state = Arc::new(AppState::new(mint, url, counter_tx));
 
 		let app = Router::new()
 			.route("/actions.json", get(Self::get_request_actions_json))
@@ -130,7 +126,7 @@ impl Server {
 			.layer(cors)
 			.with_state(state.clone());
 
-		let monitor = Monitor::new(control_rx, counter_rx);
+		let monitor = Monitor::new(counter_rx);
 
 		let addr = format!("0.0.0.0:{}", port);
 		let listener = TcpListener::bind(&addr).await.unwrap();
@@ -355,7 +351,6 @@ impl Server {
 
 	pub async fn run(mut self) -> Result<()> {
 		tokio::spawn(async move { self.monitor.run().await });
-		self.state.control_tx.send(ControlMessage::Start).await?;
 
 		axum::serve(self.listener, self.app)
 			.await

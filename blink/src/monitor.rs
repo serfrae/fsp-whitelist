@@ -8,20 +8,12 @@ use {
 };
 
 pub struct Monitor {
-	spinner: Option<ProgressBar>,
+	spinner: ProgressBar,
 	start_time: Instant,
 	update_interval: Interval,
 	get_counter: u64,
 	post_counter: u64,
-	control_rx: mpsc::Receiver<ControlMessage>,
 	counter_rx: mpsc::Receiver<CounterMessage>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum ControlMessage {
-	Start,
-	Stop,
 }
 
 pub enum CounterMessage {
@@ -31,24 +23,27 @@ pub enum CounterMessage {
 
 impl Monitor {
 	pub fn new(
-		control_rx: mpsc::Receiver<ControlMessage>,
 		counter_rx: mpsc::Receiver<CounterMessage>,
 	) -> Self {
+		let spinner = ProgressBar::new_spinner();
+		spinner.set_style(
+			ProgressStyle::default_spinner()
+				.template("{spinner:.green} {msg}")
+				.unwrap()
+				.tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+		);
 		Monitor {
-			spinner: None,
+			spinner,
 			start_time: Instant::now(),
 			update_interval: interval(Duration::from_millis(80)),
 			get_counter: 0,
 			post_counter: 0,
-			control_rx,
 			counter_rx,
 		}
 	}
 
 	fn update_spinner(&mut self) {
-		if let Some(spinner) = &self.spinner {
-			spinner.set_message(self.get_display_string());
-		}
+		self.spinner.set_message(self.get_display_string());
 	}
 
 	fn get_elapsed_time(&self) -> String {
@@ -73,31 +68,9 @@ impl Monitor {
 	}
 
 	pub async fn run(&mut self) {
+        self.spinner.enable_steady_tick(Duration::from_millis(80));
 		loop {
 			tokio::select! {
-				Some(message) = self.control_rx.recv() => {
-					match message {
-						ControlMessage::Stop => {
-							if let Some(spinner) = self.spinner.take() {
-								spinner.finish_with_message("Stopped ✔");
-							}
-						}
-						ControlMessage::Start => {
-							if self.spinner.is_none() {
-								let new_spinner = ProgressBar::new_spinner();
-								new_spinner.set_style(
-									ProgressStyle::default_spinner()
-										.template("{spinner:.green} {msg}")
-										.unwrap()
-										.tick_strings(&[
-											"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
-										]));
-								new_spinner.enable_steady_tick(Duration::from_millis(80));
-								self.spinner = Some(new_spinner);
-							}
-						}
-					}
-				},
 				Some(message) = self.counter_rx.recv() => {
 						match message {
 							CounterMessage::Get => self.get_counter += 1,
