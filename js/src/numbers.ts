@@ -49,5 +49,13 @@ export class Numberi64 extends BN {
         const bn = new BN(buffer, 'le');
         return new Numberi64(bn.fromTwos(64));
     }
+
+    sub(num: Numberi64): Numberi64 {
+        return new Numberi64(this.sub(num));
+    }
+
+    toDate(): Date {
+        return new Date(this.toNumber() * 1000);
+    }
 }
 

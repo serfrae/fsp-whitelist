@@ -341,7 +341,7 @@ pub fn add_user(
 ) -> Result<Instruction, ProgramError> {
 	let mut accounts = Vec::with_capacity(6);
 
-	accounts.push(AccountMeta::new(*whitelist, false));
+	accounts.push(AccountMeta::new_readonly(*whitelist, false));
 	accounts.push(AccountMeta::new(*authority, true));
 	accounts.push(AccountMeta::new_readonly(*mint, false));
 	accounts.push(AccountMeta::new_readonly(*user, false));
