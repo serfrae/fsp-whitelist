@@ -1,4 +1,4 @@
-# Whitelist-Gated Token Sale
+# Frae's Solana Programs - Whitelist-Gated Token Sale
 
 This program and it's associated client and blink permit users to register for a token presale.
 
