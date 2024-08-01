@@ -1,8 +1,8 @@
 [package]
-name = "stuk-whitelist"
+name = "fsp-whitelist"
 version = "0.1.0"
 authors = ["Ser Frae <a@serfrae.com>"]
-description = "Whitelist on-chain program for the Superteam UK talent olympics"
+description = "Whitelist-Gated Token Sale for Solana"
 edition = "2021"
 
 [features]
@@ -26,5 +26,5 @@ test-case = "3.3.1"
 tokio = { version = "1.38.0", features = ["full"] }
 
 [lib]
-name = "stuk_wl"
+name = "fsp-wl"
 crate-type = ["cdylib", "lib"]

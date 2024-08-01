@@ -768,18 +768,18 @@ export class InstructionBuilder {
     ): TransactionInstruction {
         const whitelist = getWhitelistAddress(mint)[0];
         const vault = getAssociatedTokenAddressSync(
-            mint, 
-            whitelist, 
-            true, 
-            tokenProgram, 
+            mint,
+            whitelist,
+            true,
+            tokenProgram,
             ASSOCIATED_TOKEN_PROGRAM_ID
         );
 
         const recipientTokenAccount = getAssociatedTokenAddressSync(
-            mint, 
-            recipient, 
-            true, 
-            tokenProgram, 
+            mint,
+            recipient,
+            true,
+            tokenProgram,
             ASSOCIATED_TOKEN_PROGRAM_ID
         );
 
@@ -997,6 +997,23 @@ export class AmendTimes {
         this.registrationDuration = fields.registrationDuration;
         this.saleTimestamp = fields.saleTimestamp;
         this.saleDuration = fields.saleDuration;
+    }
+
+    static schema: Schema = {
+        struct: {
+            registrationTimestamp: "i64",
+            registrationDuration: "i64",
+            saleTimestamp: "i64",
+            saleDuration: "i64",
+        }
+    }
+
+    serialize(): Buffer {
+        const instructionTypeBuffer = Buffer.alloc(1);
+        instructionTypeBuffer.writeUint8(AmendTimes.instructionType);
+        return Buffer.concat(
+            [instructionTypeBuffer, serialize(AmendTimes.schema, this)]
+        )
     }
 
     static instructionType = WhitelistInstruction.AmendTimes;
