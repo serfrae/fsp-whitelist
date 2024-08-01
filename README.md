@@ -8,7 +8,7 @@ This program and it's associated client and blink permit users to register for a
 
 The reason for populating fixtures is there seems to be some limitations using CPIs to the system program when using `solana-program-test`. Testing creating associated token accounts results in empty accounts, although the test succeeds, as the associated token program calls the system program with `invoke-signed` to create token accounts, tests will be updated to reflect this shortly.
 
-`testing.py` is mostly only for testing utilising `cargo test`, although it does compile both the CLI and the program with the generated program id for further testing purposes. It will not remove the `test-pid.json` so if you wish to test functionality on a your own with `solana-test-validator` you may do so by redeploying the program to your selected network. As the program will already be compiled all that is required is running `solana program deploy ./program/target/stuk_wl.so --program-id test-pid.json` from the project root directory. 
+`testing.py` is mostly only for testing utilising `cargo test`, although it does compile both the CLI and the program with the generated program id for further testing purposes. It will not remove the `test-pid.json` so if you wish to test functionality on a your own with `solana-test-validator` you may do so by redeploying the program to your selected network. As the program will already be compiled all that is required is running `solana program deploy ./program/target/fsp_wl.so --program-id test-pid.json` from the project root directory. 
 
 ## Implementation
 This program allows for a whitelist-gated token sale. It supports both spl_token and spl_token_2022 accounts and is intended to
@@ -46,11 +46,11 @@ Please ensure you have enough SOL in your wallet on the respective network (test
 
 To begin please clone this repo by copying:
 
-```git clone https://github.com/serfrae/stuk-whitelist```
+```git clone https://github.com/serfrae/fsp-whitelist```
 
 After cloning the repo navigate into it:
 
-```cd stuk-whitelist```
+```cd fsp-whitelist```
 
 To setup the CLI and deploy the program, an installation script has been provided for your convenience,
 please ensure to change the wallet addresses to the path of the wallet you wish to use for the program-id and mints.
@@ -69,17 +69,17 @@ of this writing they are not tested.
 
 After installation the CLI can be invoked from the command line with:
 
-```stuk-wl```
+```fsp-wl```
 
 The CLI will automatically utilise the wallet address at `$XDG_CONFIG_HOME/solana/id.json` when being invoked. As the program itself is quite feature-full and this was developed in two (2) days I have not had time to enable reading from configs or pointing to custom wallet
 addresses from within the CLI, although I may implement this at a later date.
 
 ## Usage - Seller
-`stuk-wl --help` will provide information on each command and subcommand
+`fsp-wl --help` will provide information on each command and subcommand
 
 ### Initialisation
 ```
-stuk-wl init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGISTRATION> [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
+fsp-wl init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGISTRATION> [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
 ```
 - `MINT`: The public key of the mint for the token that is to be sold, this field is used for all commands, the whitelist address is derived from it.
 - `TREASURY`: The target for both SOL and token withdrawals when burning tickets.
@@ -98,126 +98,126 @@ stuk-wl init <MINT> <TREASURY> <PRICE> <BUY_LIMIT> <WHITELIST_SIZE> <ALLOW_REGIS
 
 ### User Management
 ```
-stuk-wl user add <MINT> <USER>
-stuk-wl user remove <MINT> <USER>
+fsp-wl user add <MINT> <USER>
+fsp-wl user remove <MINT> <USER>
 ```
 - `add`: Add a user to the whitelist associated with the provided mint where `MINT` is the mint address of the token being sold and `USER` is the user's wallet address.
 - `remove`: Remove a user from the whitelist and claim rent where `MINT` is the mint address of the token being sold and `USER` is the user's wallet address.
 
 ### Deposit
 ```
-stuk-wl deposit <MINT> <AMOUNT>
+fsp-wl deposit <MINT> <AMOUNT>
 ```
 - Deposits tokens into the whitelist vault, where `MINT` is the mint address of the token being sold and `AMOUNT` is the amount of tokens to transfer into the vault.
 
 ### Withdraw
 ```
-stuk-wl withdraw <MINT>
+fsp-wl withdraw <MINT>
 ```
 - Withdraws tokens from the vault, tokens may not be withdrawn from the vault after the token sale begins. `MINT` is the mint address of the token being sold.
 
 ### Amend
 #### Amend Whitelist Size
 ```
-stuk-wl amend size <MINT> <SIZE>
+fsp-wl amend size <MINT> <SIZE>
 ```
 - Amend the whitelist size allowing for more users to register for the token sale. Where `MINT` is the mint address of the token being sold and `SIZE` is the number of users permitted to register for the token sale.
 
 #### Amend Times
 ```
-stuk-wl amend times [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
+fsp-wl amend times [REGISTRATION_START_TIME] [REGISTRATION_END_TIME] [SALE_START_TIME] [SALE_END_TIME]
 ```
 Note: Each argument must be provided with a flag.
 
 ### Start
 #### Start Registration
 ```
-stuk-wl start registration <MINT>
+fsp-wl start registration <MINT>
 ```
 - Commences registration upon successful transaction, will also set the `allow_registration` field to `true` and the `registration_start_timestamp` to the current unix timestamp in the whitelist account's state. `MINT` is the mint address of the token for sale.
 
 #### Start Token Sale
 ```
-stuk-wl start sale <MINT>
+fsp-wl start sale <MINT>
 ```
 - Commences the token sale upon successful transaction, will also set `sale_start_timestamp` to the current unix timestamp in the whitelist's account state. `MINT` is the mint address of the token for sale. 
 
 ### Allow Registration
 ```
-stuk-wl allow-register <MINT> <ALLOW>
+fsp-wl allow-register <MINT> <ALLOW>
 ```
 - (`"true" / "yes" / "y", "false / "no" / "n"`) Sets the `allow_registration` flag in the whitelist's account state. `MINT` is the mint address of the token for sale and `ALLOW` is one of the values provided where `"true"`, `"yes"` and `"y"` all enable registration while `"false"`, `"no"` and `"n"` disables registration. This may also be used to freeze currently ongoing registrations but may cause errors.
 
 ### Burn Tickets
 #### Burn a single ticket
 ```
-stuk-wl burn single <MINT> <USER>
+fsp-wl burn single <MINT> <USER>
 
 ```
 - Burns a single ticket and retrieves the tokens and SOL associated with the ticket. Tokens and SOL are sent to the treasury address defined in the whitelist's state. `MINT` is the mint address of the token for sale, `USER` is the wallet address of the user who purchased the ticket. 
 
 #### Burn all tickets
 ```
-stuk-wl burn bulk <MINT>
+fsp-wl burn bulk <MINT>
 ```
 - Burns all tickets associated with a whitelist and retrieves the tokens and SOL associated with those tickets. Tokens and SOL are sent to the treasury address defined in the whitelist's state. `MINT` is the mint address for the token for sale.
 
 ### Terminate Whitelist
 ```
-stuk-wl close <MINT> [RECIPIENT]
+fsp-wl close <MINT> [RECIPIENT]
 ```
 - Terminates the whitelist and closes all associated accounts reclaiming and tokens and rent to the designated recipient, if no recipient is provided, tokens and rent are transferred to the authority / caller. `MINT` is the mint address of the token for sale `RECIPIENT` takes a flag `---recipient` to define the address of the account to which rent and tokens should be sent. A whitelist may not be terminated until the token sale has ended.
 
 ### Info
 #### Whitelist Info
 ```
-stuk-wl info whitelist <MINT> 
+fsp-wl info whitelist <MINT> 
 ```
 - Retrieves information about the whitelist, mostly the parameters that are set in the whitelist's state. `MINT` is the mint address of the token for sale.
 
 #### User Info
 ```
-stuk-wl info user <MINT> <USER>
+fsp-wl info user <MINT> <USER>
 ```
 - Retrieves information about a user's ticket. `MINT` is the mint address of the token for sale, `USER` is the wallet address of the user you wish to retrieve ticket information about. An error means there is no ticket associated with the provided user wallet address.
 
 ## Usage - Buyer 
 There are only four (4) commands relevant to a whitelist subscriber/buyer in the CLI these being:
 ```
-1. stuk-wl register <MINT>
-2. stuk-wl unregister <MINT>
-3. stuk-wl token buy <MINT> <AMOUNT>
-3. stukw-wl info whitelist/user <PUBKEY> <MINT>
+1. fsp-wl register <MINT>
+2. fsp-wl unregister <MINT>
+3. fsp-wl token buy <MINT> <AMOUNT>
+3. fspw-wl info whitelist/user <PUBKEY> <MINT>
 ```
 
 ### Register
 ```
-stuk-wl register <MINT>
+fsp-wl register <MINT>
 ```
-- Register for the token sale, creating a ticket. `MINT` is the mint address of the token for sale, information about a created ticket can be retrieved using `stuk-wl info user` - see below.
+- Register for the token sale, creating a ticket. `MINT` is the mint address of the token for sale, information about a created ticket can be retrieved using `fsp-wl info user` - see below.
 
 ### Unregister
 ```
-stuk-wl unregister <MINT>
+fsp-wl unregister <MINT>
 ```
 - Unregister for the token sale, burning a ticket. Rent is reclaimed and transferred back to the payer, if the user is the payer, the to the user, else it is transferred to the whitelist's authority. `MINT` is the mint address of the token for sale.
 
 ### Buy
 ``` 
-stuk-wl buy <MINT> <AMOUNT>
+fsp-wl buy <MINT> <AMOUNT>
 ```
 - Buy tokens, users may only buy tokens if they posses a ticket i.e. are registered to the whitelist, a user may not purchase more tickets than the buy limit / their ticket allowance, doing so will result in transaction failure. `MINT` is the mint address of the token being sold, `AMOUNT` is the amount of tokens a user wishes to purchase.
 
 ### Info
 #### Whitelist Info
 ```
-stuk-wl info whitelist <MINT> 
+fsp-wl info whitelist <MINT> 
 ```
 - Retrieves information about the whitelist, mostly the parameters that are set in the whitelist's state. `MINT` is the mint address of the token for sale.
 
 #### User Info
 ```
-stuk-wl info user <MINT> <USER>
+fsp-wl info user <MINT> <USER>
 ```
 - Retrieves information about a user's ticket. `MINT` is the mint address of the token for sale, `USER` is the wallet address of the user you wish to retrieve ticket information about. An error means there is no ticket associated with the provided user wallet address.
 
