@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-stuk-whitelist = { version = "0.1.0", path = "../program" }
+fsp-whitelist = { version = "0.1.0", path = "../program" }
 axum = "0.7.5"
 base64 = "0.22.1"
 bincode = "1.3.3"

@@ -150,7 +150,7 @@ def create_token_account(
 
 def create_ticket(mint_address: str) -> str:
     command = [
-        "stuk-wl",
+        "fsp-wl",
         "--payer",
         f"{current_dir}/payer.json",
         "register",
@@ -177,7 +177,7 @@ def create_ticket(mint_address: str) -> str:
 
 def create_whitelist(mint_address: str, wallet_address: str) -> str:
     command = [
-        "stuk-wl",
+        "fsp-wl",
         "--payer",
         f"{current_dir}/payer.json",
         "init",
@@ -209,7 +209,7 @@ def create_whitelist(mint_address: str, wallet_address: str) -> str:
 
 def allow_registration(mint_address: str) -> None:
     command = [
-        "stuk-wl",
+        "fsp-wl",
         "--payer",
         f"{current_dir}/payer.json",
         "allow-register",
@@ -263,7 +263,7 @@ subprocess.run(
         "solana",
         "program",
         "deploy",
-        f"{current_dir}/program/target/deploy/stuk_wl.so",
+        f"{current_dir}/program/target/deploy/fsp_wl.so",
         "--program-id",
         f"{current_dir}/test-pid.json",
         "--fee-payer",

@@ -11,7 +11,7 @@ use {
 	serde_json::{json, Value},
     solana_sdk::{pubkey::Pubkey, transaction::Transaction},
     std::{str::FromStr, sync::Arc},
-    stuk_wl::instructions,
+    fsp_wl::instructions,
 };
 
 #[derive(Serialize)]
@@ -150,8 +150,8 @@ pub(crate) async fn buy_post_request_handler(
 		)
 	})?;
 
-	let (whitelist, _) = stuk_wl::get_whitelist_address(&state.mint);
-	let (ticket, _) = stuk_wl::get_user_ticket_address(&account, &whitelist);
+	let (whitelist, _) = fsp_wl::get_whitelist_address(&state.mint);
+	let (ticket, _) = fsp_wl::get_user_ticket_address(&account, &whitelist);
 
 	let mint_account = state.rpc_client.get_account(&state.mint).map_err(|err| {
 		(
@@ -239,8 +239,8 @@ pub(crate) async fn reg_post_request_handler(
 		)
 	})?;
 
-	let (whitelist, _) = stuk_wl::get_whitelist_address(&state.mint);
-	let (ticket, _) = stuk_wl::get_user_ticket_address(&account, &whitelist);
+	let (whitelist, _) = fsp_wl::get_whitelist_address(&state.mint);
+	let (ticket, _) = fsp_wl::get_user_ticket_address(&account, &whitelist);
 
 	let instruction = instructions::register(&whitelist, &account, &ticket).map_err(|err| {
 		(
